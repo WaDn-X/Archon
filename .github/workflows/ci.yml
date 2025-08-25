@@ -20,7 +20,7 @@ jobs:
   # Will enable this after overhaul of frontend for linting
   frontend-tests:
     name: Frontend Tests (React + Vitest)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     defaults:
       run:
         working-directory: ./archon-ui-main
@@ -74,7 +74,7 @@ jobs:
   # Job 2: Backend Testing (Python/pytest)
   backend-tests:
     name: Backend Tests (Python + pytest)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     defaults:
       run:
         working-directory: ./python
@@ -147,7 +147,7 @@ jobs:
   # Job 3: Docker Build Test
   docker-build-test:
     name: Docker Build Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     
     strategy:
       matrix:
@@ -244,7 +244,7 @@ jobs:
   # Job 4: Test Results Summary
   test-summary:
     name: Test Results Summary
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [frontend-tests, backend-tests, docker-build-test]
     if: always()
 
