@@ -5,7 +5,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { MCPPage } from './pages/MCPPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { MainLayout } from './components/layouts/MainLayout';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { EnhancedThemeProvider } from './contexts/EnhancedThemeContext';
+import { I18nProvider } from './contexts/I18nContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { SettingsProvider, useSettings } from './contexts/SettingsContext';
 import { ProjectPage } from './pages/ProjectPage';
@@ -91,12 +92,14 @@ const AppContent = () => {
 
 export function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <SettingsProvider>
-          <AppContent />
-        </SettingsProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    <I18nProvider>
+      <EnhancedThemeProvider>
+        <ToastProvider>
+          <SettingsProvider>
+            <AppContent />
+          </SettingsProvider>
+        </ToastProvider>
+      </EnhancedThemeProvider>
+    </I18nProvider>
   );
 }

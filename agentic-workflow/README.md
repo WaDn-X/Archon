@@ -1,286 +1,288 @@
-# Agentic Workflow - Advanced AI Agent Orchestration
+# Zippy-Archon Platform 🚀
 
-This directory contains the enhanced agentic workflow system that extends the original Archon V2 with sophisticated plugin management, intelligent error handling, and advanced orchestration capabilities.
+A comprehensive AI-powered platform for requirements engineering, A/B testing, and marketplace trading with ZippyTrust validation and ZippyCoin integration.
 
-## 🎯 Overview
+## ✨ Features
 
-The Agentic Workflow system is designed to be a "master tool" that can:
-- Accept high-level prompts and automatically spin up specialized agents
-- Dynamically load and manage plugins and tools
-- Handle errors intelligently with self-healing capabilities
-- Continuously learn and adapt based on experience
-- Orchestrate complex multi-agent workflows
+### 🤖 **Multi-Provider AI Integration**
+- **Grok AI (xAI)** - Real-time AI generation with fallback
+- **OpenAI GPT-4/3.5** - Industry-standard AI models
+- **Anthropic Claude** - Advanced reasoning capabilities
+- **Zippy AI** - Custom models with trust validation
+- Automatic fallback and cost optimization
 
-## 🏗️ Architecture
+### 🔒 **ZippyTrust Validation**
+- Content quality assessment
+- Security vulnerability detection
+- Code quality analysis
+- Documentation evaluation
+- Community trust scoring
+- Real-time validation feedback
 
-### Core Components
+### 📊 **Enhanced A/B Testing**
+- Multi-version prompt comparison
+- Statistical significance testing
+- Cost-effectiveness analysis
+- Winner determination algorithms
+- Results export and sharing
+- Marketplace integration
 
-1. **Orchestrator** (`orchestrator.py`)
-   - Master workflow controller
-   - Manages agent coordination and routing
-   - Handles dynamic workflow creation
+### 🏪 **ZippyCoin Marketplace**
+- Trade spec templates and A/B test results
+- Trust-based pricing
+- Secure transaction processing
+- User reputation system
+- Content discovery and search
+- Revenue sharing model
 
-2. **Plugin System** (`plugins/`)
-   - Dynamic tool loading and registration
-   - Standardized plugin interface
-   - Hot-swappable capabilities
+### 🎯 **Enhanced Rubric Scoring**
+- VoidSpec metrics integration
+- EARS compliance checking
+- Testability assessment
+- Clarity and structure evaluation
+- Automated improvement suggestions
+- Trust insights generation
 
-3. **Diagnostic Agents** (`diagnostic_agent.py`)
-   - Intelligent error detection and resolution
-   - Self-healing capabilities
-   - Problem diagnosis and recovery
-
-4. **Tool Generator** (`tool_generator_agent.py`)
-   - AI-powered tool creation
-   - Automatic code generation
-   - Integration testing
-
-5. **Enhanced Graph** (`archon_graph.py`)
-   - LangGraph-based workflow definition
-   - Advanced state management
-   - Conditional routing and decision making
+### 🗄️ **Supabase Database Integration**
+- Real-time data synchronization
+- User authentication and management
+- Transaction history tracking
+- Analytics and reporting
+- Scalable cloud storage
+- Automatic backups
 
 ## 🚀 Quick Start
 
 ### Prerequisites
+- Python 3.8+
+- Supabase account
+- AI provider API keys (at least one)
 
-- Python 3.11+
-- Supabase account and database
-- OpenAI/OpenRouter API key or Ollama for local LLMs
-- Streamlit (for web interface)
+### Installation
 
-### Setup
-
-1. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Configure environment**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys and preferences
-   ```
-
-3. **Database setup**:
-   - Execute the SQL commands in `site_pages.sql` in your Supabase SQL Editor
-
-4. **Run the system**:
-   ```bash
-   # Start the Streamlit interface
-   streamlit run streamlit_ui.py
-   
-   # Or run the LangGraph workflow directly
-   python archon_graph.py
-   ```
-
-## 🧩 Plugin System
-
-### Creating Plugins
-
-1. **Create a new plugin file** in `plugins/`:
-   ```python
-   # plugins/my_custom_tool.py
-   
-   class MyCustomTool:
-       name = "my_custom_tool"
-       description = "A custom tool for specific tasks"
-       
-       def run(self, *args, **kwargs):
-           # Your tool logic here
-           return result
-   ```
-
-2. **Register your plugin**:
-   ```python
-   from plugins.plugin_manager import register_tool
-   from plugins.my_custom_tool import MyCustomTool
-   
-   # Register the tool
-   register_tool(MyCustomTool())
-   ```
-
-3. **Use in workflows**:
-   ```python
-   from plugins.plugin_manager import get_tool_by_name
-   
-   tool = get_tool_by_name("my_custom_tool")
-   result = tool.run(your_parameters)
-   ```
-
-### Plugin Template
-
-See `plugins/pluginTemplate.md` for a detailed template and examples.
-
-## 🔧 Advanced Features
-
-### Intelligent Error Handling
-
-The diagnostic agent can:
-- Detect common error patterns
-- Suggest solutions and workarounds
-- Automatically retry with different approaches
-- Learn from previous errors to prevent recurrence
-
-### Dynamic Tool Generation
-
-The tool generator can:
-- Create new tools based on requirements
-- Generate code for custom integrations
-- Test and validate new tools
-- Integrate tools into existing workflows
-
-### Enhanced Orchestration
-
-The orchestrator provides:
-- Dynamic workflow creation
-- Intelligent agent routing
-- State management and persistence
-- Real-time progress tracking
-
-## 📊 Usage Examples
-
-### Basic Workflow
-
-```python
-from orchestrator import Orchestrator
-
-# Create orchestrator instance
-orchestrator = Orchestrator()
-
-# Start a new workflow
-orchestrator.start_flow("Build me a Slack integration that notifies the team when a new lead arrives")
+1. **Clone the repository**
+```bash
+git clone https://github.com/your-org/zippy-archon.git
+cd zippy-archon/agentic-workflow
 ```
 
-### Custom Plugin Integration
-
-```python
-from plugins.plugin_manager import load_plugins, get_tool_by_name
-
-# Load all plugins
-load_plugins("plugins/")
-
-# Use a specific tool
-slack_tool = get_tool_by_name("slack_notification")
-result = slack_tool.run(message="New lead received!", channel="#leads")
+2. **Install dependencies**
+```bash
+pip install -r requirements.txt
 ```
 
-### Error Recovery
-
-```python
-from diagnostic_agent import diagnose_errors
-
-# When an error occurs, the system can automatically diagnose and recover
-diagnosis = await diagnose_errors(error_context)
-if diagnosis.can_recover:
-    recovery_action = diagnosis.suggested_action
-    # Execute recovery
+3. **Configure environment**
+```bash
+cp env.example .env
+# Edit .env with your API keys and configuration
 ```
 
-## 🔗 Integration with Archon V6
-
-The agentic workflow can integrate with the main Archon V6 system:
-
-1. **Knowledge Base Access**: Use crawled documentation and uploaded files
-2. **Task Management**: Create and manage project tasks
-3. **MCP Server**: Expose agentic workflow capabilities via MCP
-4. **Web UI**: Access through the main Archon interface
-
-## 📚 API Reference
-
-### Orchestrator Class
-
-```python
-class Orchestrator:
-    def __init__(self)
-    def start_flow(self, user_message: str)
-    def resume_flow(self, user_message: str)
-    def get_current_state(self) -> AgentState
+4. **Set up database**
+```bash
+# Run the migration script
+psql -h your-supabase-host -U your-user -d your-db -f database/migrations/001_initial_schema.sql
 ```
 
-### Plugin Manager
-
-```python
-def register_tool(tool: Tool)
-def load_plugins(plugins_dir: str)
-def get_tool_by_name(name: str) -> Optional[Tool]
+5. **Start the platform**
+```bash
+python start_server.py
 ```
 
-### Diagnostic Agent
+### Environment Configuration
 
-```python
-async def diagnose_errors(error_context: dict) -> Diagnosis
-```
-
-## 🛠️ Development
-
-### Adding New Agents
-
-1. Create your agent class
-2. Implement the required interface
-3. Add to the orchestrator workflow
-4. Test with the diagnostic system
-
-### Extending the Plugin System
-
-1. Define new plugin interfaces
-2. Update the plugin manager
-3. Add validation and testing
-4. Document the new capabilities
-
-### Testing
+Required environment variables:
 
 ```bash
-# Run tests
-python -m pytest tests/
+# Database
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your_service_key
 
-# Run with coverage
-python -m pytest --cov=.
+# AI Providers (at least one required)
+XAI_API_KEY=your_grok_api_key
+OPENAI_API_KEY=your_openai_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
+ZIPPY_API_KEY=your_zippy_api_key
+
+# Security
+JWT_SECRET_KEY=your_jwt_secret_key
 ```
 
-## 🔍 Troubleshooting
+## 📖 API Documentation
 
-### Common Issues
+Once the server is running, visit:
+- **Interactive API Docs**: http://localhost:8000/docs
+- **Alternative Docs**: http://localhost:8000/redoc
+- **Health Check**: http://localhost:8000/health
 
-1. **Plugin Loading Errors**
-   - Check plugin implements the Tool protocol
-   - Verify plugin file is in the correct directory
-   - Check for import errors
+### Key Endpoints
 
-2. **Workflow State Issues**
-   - Clear the memory checkpoint
-   - Restart the orchestrator
-   - Check for state corruption
-
-3. **API Key Issues**
-   - Verify API keys in .env file
-   - Check rate limits and quotas
-   - Test with different providers
-
-### Debug Mode
-
-Enable debug logging by setting:
+#### Requirements Generation
 ```bash
-LOG_LEVEL=DEBUG
+POST /api/v1/specs/generate
+{
+  "prompt": "Create a user authentication system",
+  "provider": "grok",
+  "version": "v1",
+  "reviewer_pass": true
+}
 ```
 
-## 📈 Future Enhancements
+#### A/B Testing
+```bash
+POST /api/v1/ab-test/run
+{
+  "prompt": "Design a payment processing system",
+  "versions": ["v1", "v1b", "enhanced"],
+  "provider": "grok",
+  "num_runs": 3
+}
+```
 
-- **Multi-tenant Support**: Isolated workflows per user/organization
-- **Advanced Reasoning**: More sophisticated decision-making capabilities
-- **Performance Optimization**: Caching and parallel processing
-- **Extended Plugin Ecosystem**: More built-in tools and integrations
-- **Visual Workflow Builder**: Drag-and-drop workflow creation
+#### Marketplace
+```bash
+POST /api/v1/marketplace/listings
+{
+  "title": "E-commerce Requirements Template",
+  "description": "Complete requirements for e-commerce platform",
+  "content": {...},
+  "category": "spec_template",
+  "pricing": {"price": 50, "currency": "ZIPPY"}
+}
+```
+
+#### Trust Validation
+```bash
+POST /api/v1/trust/validate
+{
+  "content": "WHEN user logs in THE SYSTEM SHALL authenticate credentials",
+  "content_type": "requirements"
+}
+```
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   FastAPI       │    │   Supabase      │    │   AI Providers  │
+│   Server        │◄──►│   Database      │    │   (Grok/OpenAI) │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   ZippyTrust    │    │   Marketplace   │    │   A/B Testing   │
+│   Validation    │    │   (ZippyCoin)   │    │   System        │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+## 🔧 Development
+
+### Project Structure
+```
+agentic-workflow/
+├── api/                    # FastAPI server and endpoints
+├── ai/                     # Multi-provider AI integration
+├── database/               # Supabase client and migrations
+├── plugins/                # ZippyTrust and marketplace
+├── testing/                # A/B testing and rubric scoring
+├── specs/                  # Requirements management
+├── logs/                   # Application logs
+├── data/                   # Data storage
+├── requirements.txt        # Python dependencies
+├── env.example            # Environment configuration
+└── start_server.py        # Startup script
+```
+
+### Running Tests
+```bash
+pytest tests/ -v
+```
+
+### Code Quality
+```bash
+# Format code
+black .
+
+# Lint code
+flake8 .
+
+# Type checking
+mypy .
+```
+
+## 🚀 Deployment
+
+### Docker Deployment
+```bash
+# Build image
+docker build -t zippy-archon .
+
+# Run container
+docker run -p 8000:8000 --env-file .env zippy-archon
+```
+
+### Production Considerations
+- Set `ENVIRONMENT=production`
+- Configure proper CORS origins
+- Set up monitoring (Sentry)
+- Enable rate limiting
+- Configure SSL/TLS
+- Set up automated backups
+
+## 📊 Monitoring and Analytics
+
+The platform includes comprehensive monitoring:
+
+- **Health checks**: `/health` endpoint
+- **Usage statistics**: `/api/v1/analytics/stats`
+- **AI usage tracking**: `/api/v1/analytics/ai-usage`
+- **User statistics**: Database views
+- **Error tracking**: Sentry integration
+
+## 🔐 Security Features
+
+- JWT-based authentication
+- API key management
+- Rate limiting
+- Input validation
+- SQL injection prevention
+- XSS protection
+- CORS configuration
 
 ## 🤝 Contributing
 
-Contributions to the agentic workflow system are welcome! Please:
-
-1. Follow the existing code patterns
-2. Add tests for new features
-3. Update documentation
-4. Test with the diagnostic system
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
 
 ## 📄 License
 
-This component is part of Zippy Archon and follows the same MIT license as the main project.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **Documentation**: [docs.zippy-archon.com](https://docs.zippy-archon.com)
+- **Issues**: [GitHub Issues](https://github.com/your-org/zippy-archon/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/zippy-archon/discussions)
+
+## 🎯 Roadmap
+
+- [ ] **VS Code Extension Enhancement**
+  - Real-time collaboration
+- [ ] **Advanced Analytics**
+  - Machine learning insights
+- [ ] **Mobile App**
+  - iOS and Android support
+- [ ] **Enterprise Features**
+  - SSO integration
+  - Advanced permissions
+- [ ] **AI Model Training**
+  - Custom model fine-tuning
+- [ ] **Blockchain Integration**
+  - Smart contracts for marketplace
+  - Decentralized governance
+
+---
+
+**Built with ❤️ by the Zippy-Archon Team**

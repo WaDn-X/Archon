@@ -49,29 +49,55 @@ class CredentialService:
 
     def _get_supabase_client(self) -> Client:
         """
-        Get or create a properly configured Supabase client using environment variables.
-        Uses the standard Supabase client initialization.
+        Get or create a properly configured database client (supports multiple database types).
         """
         if self._supabase is None:
-            url = os.getenv("SUPABASE_URL")
-            key = os.getenv("SUPABASE_SERVICE_KEY")
-
-            if not url or not key:
-                raise ValueError(
-                    "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment variables"
-                )
+            database_type = os.getenv("DATABASE_TYPE", "sqlite").lower()
 
             try:
-                # Initialize with standard Supabase client - no need for custom headers
-                self._supabase = create_client(url, key)
+                if database_type == "supabase":
+                    # Use Supabase
+                    url = os.getenv("SUPABASE_URL")
+                    key = os.getenv("SUPABASE_SERVICE_KEY")
 
-                # Extract project ID from URL for logging purposes only
-                match = re.match(r"https://([^.]+)\.supabase\.co", url)
-                if match:
-                    project_id = match.group(1)
-                    logger.info(f"Supabase client initialized for project: {project_id}")
+                    if not url or not key:
+                        raise ValueError(
+                            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment variables for Supabase"
+                        )
+
+                    self._supabase = create_client(url, key)
+
+                    # Extract project ID from URL for logging purposes only
+                    match = re.match(r"https://([^.]+)\.supabase\.co", url)
+                    if match:
+                        project_id = match.group(1)
+                        logger.info(f"Supabase client initialized for project: {project_id}")
+                    else:
+                        logger.info("Supabase client initialized successfully")
+
                 else:
-                    logger.info("Supabase client initialized successfully")
+                    # Use local database through our database factory
+                    import sys
+                    import os
+                    sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+                    from database.database_factory import initialize_database
+                    import asyncio
+
+                    # Initialize database in a synchronous context
+                    try:
+                        # Create a new event loop for async database initialization
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        db_manager = loop.run_until_complete(initialize_database())
+                        loop.close()
+
+                        # Store the database manager for later use
+                        self._supabase = db_manager
+                        logger.info(f"{database_type.upper()} database initialized successfully")
+
+                    except Exception as e:
+                        raise ValueError(f"Failed to initialize {database_type} database: {e}")
 
             except Exception as e:
                 logger.error(f"Error initializing Supabase client: {e}")

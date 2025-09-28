@@ -1,358 +1,439 @@
-# plugins/marketplace.py
+"""
+ZippyCoin Marketplace for Development Assets
 
-import json
+This module implements a marketplace system for trading spec templates,
+A/B test results, and other development assets using ZippyCoin.
+"""
+
 import asyncio
-import aiohttp
+import json
+import uuid
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional, Any
 from datetime import datetime
-from pathlib import Path
-import hashlib
+import logging
 
-from .trust_manager import PluginMetadata, TrustScore
+logger = logging.getLogger(__name__)
 
 @dataclass
-class PluginListing:
-    plugin_id: str
-    name: str
+class MarketplaceListing:
+    """Marketplace listing for development assets."""
+    listing_id: str
+    title: str
     description: str
-    author: str
-    price_zippycoin: float
-    trust_score: float
-    download_count: int
-    rating: float
+    content: Dict[str, Any]
     tags: List[str]
-    version: str
-    license: str
-    repository: Optional[str]
+    author: str
+    author_wallet: str
+    pricing: Dict[str, Any]
+    trust_score: float
+    category: str  # 'spec_template', 'ab_test_result', 'milestone_template'
     created_at: str
     updated_at: str
-    status: str  # "active", "inactive", "flagged"
+    purchase_count: int
+    rating: float
+    reviews: List[Dict[str, Any]]
 
 @dataclass
 class PurchaseTransaction:
+    """Purchase transaction record."""
     transaction_id: str
-    plugin_id: str
+    listing_id: str
     buyer_wallet: str
     seller_wallet: str
     amount: float
-    timestamp: str
-    status: str  # "pending", "completed", "failed"
-    description: str
-
-class ZippyCoinClient:
-    def __init__(self, api_url: str = "https://api.zippycoin.com"):
-        self.api_url = api_url
-        self.session = None
-    
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-    
-    async def get_balance(self, wallet_address: str) -> float:
-        """Get ZippyCoin balance for a wallet"""
-        try:
-            async with self.session.get(f"{self.api_url}/balance/{wallet_address}") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("balance", 0.0)
-                else:
-                    print(f"Failed to get balance: {response.status}")
-                    return 0.0
-        except Exception as e:
-            print(f"Error getting balance: {e}")
-            return 0.0
-    
-    async def transfer(self, from_wallet: str, to_wallet: str, amount: float, description: str = "") -> Dict[str, Any]:
-        """Transfer ZippyCoin between wallets"""
-        try:
-            payload = {
-                "from_wallet": from_wallet,
-                "to_wallet": to_wallet,
-                "amount": amount,
-                "description": description,
-                "timestamp": datetime.now().isoformat()
-            }
-            
-            async with self.session.post(f"{self.api_url}/transfer", json=payload) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    return {"success": False, "error": f"Transfer failed: {response.status}"}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-    
-    async def create_wallet(self) -> Dict[str, Any]:
-        """Create a new ZippyCoin wallet"""
-        try:
-            async with self.session.post(f"{self.api_url}/wallet/create") as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    return {"success": False, "error": f"Wallet creation failed: {response.status}"}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+    currency: str
+    status: str  # 'pending', 'completed', 'failed'
+    created_at: str
+    completed_at: Optional[str]
 
 class ZippyCoinMarketplace:
-    def __init__(self, marketplace_url: str = "https://marketplace.zippycoin.com"):
-        self.marketplace_url = marketplace_url
-        self.listings: Dict[str, PluginListing] = {}
-        self.transactions: List[PurchaseTransaction] = []
-        self.cache_file = Path("marketplace_cache.json")
-        self._load_cache()
+    """
+    ZippyCoin marketplace for development assets.
+    """
     
-    def _load_cache(self):
-        """Load cached marketplace data"""
-        if self.cache_file.exists():
-            try:
-                with open(self.cache_file, 'r') as f:
-                    cache_data = json.load(f)
-                    self.listings = {
-                        plugin_id: PluginListing(**listing_data)
-                        for plugin_id, listing_data in cache_data.get("listings", {}).items()
-                    }
-            except Exception as e:
-                print(f"Warning: Could not load marketplace cache: {e}")
+    def __init__(self):
+        self.listings: Dict[str, MarketplaceListing] = {}
+        self.transactions: Dict[str, PurchaseTransaction] = {}
+        self.categories = {
+            'spec_template': 'Specification Templates',
+            'ab_test_result': 'A/B Test Results',
+            'milestone_template': 'Milestone Templates',
+            'prompt_template': 'Prompt Templates',
+            'workflow_template': 'Workflow Templates'
+        }
     
-    def _save_cache(self):
-        """Save marketplace data to cache"""
-        try:
-            cache_data = {
-                "listings": {
-                    plugin_id: asdict(listing)
-                    for plugin_id, listing in self.listings.items()
-                },
-                "last_updated": datetime.now().isoformat()
-            }
-            with open(self.cache_file, 'w') as f:
-                json.dump(cache_data, f, indent=2)
-        except Exception as e:
-            print(f"Warning: Could not save marketplace cache: {e}")
-    
-    async def list_plugin(self, plugin: PluginListing, seller_wallet: str) -> bool:
-        """List plugin for sale in marketplace"""
-        try:
-            # Verify plugin with ZippyTrust first
-            from .trust_manager import ZippyTrustManager
-            trust_manager = ZippyTrustManager()
+    async def create_listing(self, listing_data: Dict[str, Any]) -> str:
+        """
+        Create a new marketplace listing.
+        
+        Args:
+            listing_data: Listing data including title, description, content, etc.
             
-            # Create metadata for verification
-            metadata = PluginMetadata(
-                name=plugin.name,
-                description=plugin.description,
-                author=plugin.author,
-                version=plugin.version,
-                dependencies=[],
-                tags=plugin.tags,
-                license=plugin.license,
-                repository=plugin.repository
+        Returns:
+            Listing ID
+        """
+        try:
+            listing_id = str(uuid.uuid4())
+            
+            # Validate required fields
+            required_fields = ['title', 'description', 'content', 'tags', 'author', 'pricing']
+            for field in required_fields:
+                if field not in listing_data:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Create listing
+            listing = MarketplaceListing(
+                listing_id=listing_id,
+                title=listing_data['title'],
+                description=listing_data['description'],
+                content=listing_data['content'],
+                tags=listing_data['tags'],
+                author=listing_data['author'],
+                author_wallet=listing_data.get('author_wallet', 'unknown'),
+                pricing=listing_data['pricing'],
+                trust_score=listing_data.get('trust_score', 0.5),
+                category=listing_data.get('category', 'spec_template'),
+                created_at=datetime.now().isoformat(),
+                updated_at=datetime.now().isoformat(),
+                purchase_count=0,
+                rating=0.0,
+                reviews=[]
             )
             
-            # For now, use a mock verification since we don't have the actual code
-            # In a real implementation, you'd pass the actual plugin code
-            mock_code = f"# Plugin: {plugin.name}\n# Author: {plugin.author}\n# Version: {plugin.version}"
-            trust_score = await trust_manager.verify_plugin(mock_code, metadata)
+            # Store listing
+            self.listings[listing_id] = listing
             
-            if trust_score.zippy_trust_score >= 0.8:  # High trust threshold for marketplace
-                plugin.trust_score = trust_score.zippy_trust_score
-                plugin.created_at = datetime.now().isoformat()
-                plugin.updated_at = datetime.now().isoformat()
-                plugin.status = "active"
-                
-                self.listings[plugin.plugin_id] = plugin
-                self._save_cache()
-                
-                print(f"✅ Plugin '{plugin.name}' listed successfully with trust score: {trust_score.zippy_trust_score:.2f}")
-                return True
-            else:
-                print(f"❌ Plugin '{plugin.name}' failed trust verification for marketplace listing")
-                return False
-                
+            logger.info(f"Created marketplace listing: {listing_id} - {listing.title}")
+            
+            return listing_id
+            
         except Exception as e:
-            print(f"❌ Failed to list plugin '{plugin.name}': {e}")
-            return False
+            logger.error(f"Failed to create listing: {e}")
+            raise
     
-    async def purchase_plugin(self, plugin_id: str, buyer_wallet: str) -> Dict[str, Any]:
-        """Purchase plugin using ZippyCoin"""
-        listing = self.listings.get(plugin_id)
-        if not listing:
-            return {"success": False, "error": "Plugin not found"}
-        
-        if listing.status != "active":
-            return {"success": False, "error": f"Plugin is not available (status: {listing.status})"}
-        
-        try:
-            async with ZippyCoinClient() as coin_client:
-                # Check buyer balance
-                balance = await coin_client.get_balance(buyer_wallet)
-                if balance < listing.price_zippycoin:
-                    return {
-                        "success": False, 
-                        "error": f"Insufficient balance. Required: {listing.price_zippycoin}, Available: {balance}"
-                    }
-                
-                # Process ZippyCoin transaction
-                transaction_result = await coin_client.transfer(
-                    from_wallet=buyer_wallet,
-                    to_wallet=listing.author,  # Assuming author is the seller
-                    amount=listing.price_zippycoin,
-                    description=f"Plugin purchase: {listing.name}"
-                )
-                
-                if transaction_result.get("success"):
-                    # Create transaction record
-                    transaction = PurchaseTransaction(
-                        transaction_id=transaction_result.get("transaction_id", f"tx_{datetime.now().timestamp()}"),
-                        plugin_id=plugin_id,
-                        buyer_wallet=buyer_wallet,
-                        seller_wallet=listing.author,
-                        amount=listing.price_zippycoin,
-                        timestamp=datetime.now().isoformat(),
-                        status="completed",
-                        description=f"Purchase of {listing.name}"
-                    )
-                    
-                    self.transactions.append(transaction)
-                    
-                    # Update download count
-                    listing.download_count += 1
-                    listing.updated_at = datetime.now().isoformat()
-                    self._save_cache()
-                    
-                    # Grant access to plugin (in a real implementation, this would download/install the plugin)
-                    await self._grant_plugin_access(buyer_wallet, plugin_id)
-                    
-                    return {
-                        "success": True,
-                        "transaction": asdict(transaction),
-                        "message": f"Successfully purchased {listing.name} for {listing.price_zippycoin} ZippyCoin"
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": transaction_result.get("error", "Transaction failed")
-                    }
-                    
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+    async def get_listing(self, listing_id: str) -> Optional[MarketplaceListing]:
+        """Get a marketplace listing by ID."""
+        return self.listings.get(listing_id)
     
-    async def _grant_plugin_access(self, buyer_wallet: str, plugin_id: str):
-        """Grant access to purchased plugin"""
-        # In a real implementation, this would:
-        # 1. Download the plugin code
-        # 2. Install it in the user's plugin directory
-        # 3. Register it with the plugin manager
-        # 4. Update user's plugin access permissions
+    async def search_listings(self, query: str = None, category: str = None,
+                            tags: List[str] = None, min_trust_score: float = 0.0,
+                            max_price: float = None) -> List[MarketplaceListing]:
+        """
+        Search marketplace listings.
         
-        print(f"🎁 Granting access to plugin {plugin_id} for wallet {buyer_wallet}")
-        
-        # For now, just create a placeholder
-        access_file = Path(f"plugin_access_{buyer_wallet}_{plugin_id}.json")
-        access_data = {
-            "wallet": buyer_wallet,
-            "plugin_id": plugin_id,
-            "purchased_at": datetime.now().isoformat(),
-            "status": "active"
-        }
-        
-        with open(access_file, 'w') as f:
-            json.dump(access_data, f, indent=2)
-    
-    def search_plugins(self, query: str = "", tags: List[str] = None, min_trust: float = 0.0, max_price: float = None) -> List[PluginListing]:
-        """Search for plugins in the marketplace"""
+        Args:
+            query: Search query
+            category: Filter by category
+            tags: Filter by tags
+            min_trust_score: Minimum trust score
+            max_price: Maximum price
+            
+        Returns:
+            List of matching listings
+        """
         results = []
         
         for listing in self.listings.values():
-            if listing.status != "active":
+            # Apply filters
+            if category and listing.category != category:
                 continue
-            
-            # Filter by query
-            if query and query.lower() not in listing.name.lower() and query.lower() not in listing.description.lower():
+                
+            if min_trust_score and listing.trust_score < min_trust_score:
                 continue
-            
-            # Filter by tags
+                
+            if max_price and listing.pricing.get('amount', 0) > max_price:
+                continue
+                
             if tags and not any(tag in listing.tags for tag in tags):
                 continue
-            
-            # Filter by trust score
-            if listing.trust_score < min_trust:
-                continue
-            
-            # Filter by price
-            if max_price and listing.price_zippycoin > max_price:
-                continue
+                
+            if query:
+                # Simple text search
+                search_text = f"{listing.title} {listing.description} {' '.join(listing.tags)}".lower()
+                if query.lower() not in search_text:
+                    continue
             
             results.append(listing)
         
-        # Sort by trust score (highest first)
-        results.sort(key=lambda x: x.trust_score, reverse=True)
+        # Sort by trust score and rating
+        results.sort(key=lambda x: (x.trust_score, x.rating), reverse=True)
         
         return results
     
-    def get_plugin_details(self, plugin_id: str) -> Optional[PluginListing]:
-        """Get detailed information about a plugin"""
-        return self.listings.get(plugin_id)
+    async def purchase_listing(self, listing_id: str, buyer_wallet: str) -> Dict[str, Any]:
+        """
+        Purchase a marketplace listing.
+        
+        Args:
+            listing_id: ID of the listing to purchase
+            buyer_wallet: Buyer's wallet address
+            
+        Returns:
+            Purchase result
+        """
+        try:
+            listing = self.listings.get(listing_id)
+            if not listing:
+                return {
+                    'success': False,
+                    'error': 'Listing not found'
+                }
+            
+            # Create transaction
+            transaction_id = str(uuid.uuid4())
+            transaction = PurchaseTransaction(
+                transaction_id=transaction_id,
+                listing_id=listing_id,
+                buyer_wallet=buyer_wallet,
+                seller_wallet=listing.author_wallet,
+                amount=listing.pricing['amount'],
+                currency=listing.pricing['currency'],
+                status='pending',
+                created_at=datetime.now().isoformat(),
+                completed_at=None
+            )
+            
+            # Simulate payment processing
+            await asyncio.sleep(0.1)  # Simulate processing time
+            
+            # Complete transaction
+            transaction.status = 'completed'
+            transaction.completed_at = datetime.now().isoformat()
+            
+            # Update listing
+            listing.purchase_count += 1
+            listing.updated_at = datetime.now().isoformat()
+            
+            # Store transaction
+            self.transactions[transaction_id] = transaction
+            
+            logger.info(f"Completed purchase: {transaction_id} - {listing.title}")
+            
+            return {
+                'success': True,
+                'transaction_id': transaction_id,
+                'listing': asdict(listing),
+                'transaction': asdict(transaction)
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to purchase listing: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
-    def get_user_purchases(self, wallet_address: str) -> List[PurchaseTransaction]:
-        """Get purchase history for a wallet"""
-        return [
-            tx for tx in self.transactions
-            if tx.buyer_wallet == wallet_address and tx.status == "completed"
-        ]
+    async def add_review(self, listing_id: str, reviewer_wallet: str, 
+                        rating: float, review_text: str) -> Dict[str, Any]:
+        """
+        Add a review to a marketplace listing.
+        
+        Args:
+            listing_id: ID of the listing
+            reviewer_wallet: Reviewer's wallet address
+            rating: Rating (1-5)
+            review_text: Review text
+            
+        Returns:
+            Review result
+        """
+        try:
+            listing = self.listings.get(listing_id)
+            if not listing:
+                return {
+                    'success': False,
+                    'error': 'Listing not found'
+                }
+            
+            # Validate rating
+            if not 1 <= rating <= 5:
+                return {
+                    'success': False,
+                    'error': 'Rating must be between 1 and 5'
+                }
+            
+            # Check if user has purchased the listing
+            has_purchased = any(
+                t.buyer_wallet == reviewer_wallet and t.status == 'completed'
+                for t in self.transactions.values()
+                if t.listing_id == listing_id
+            )
+            
+            if not has_purchased:
+                return {
+                    'success': False,
+                    'error': 'Must purchase listing before reviewing'
+                }
+            
+            # Add review
+            review = {
+                'reviewer_wallet': reviewer_wallet,
+                'rating': rating,
+                'review_text': review_text,
+                'created_at': datetime.now().isoformat()
+            }
+            
+            listing.reviews.append(review)
+            
+            # Update average rating
+            total_rating = sum(r['rating'] for r in listing.reviews)
+            listing.rating = total_rating / len(listing.reviews)
+            listing.updated_at = datetime.now().isoformat()
+            
+            logger.info(f"Added review to listing {listing_id}: {rating}/5")
+            
+            return {
+                'success': True,
+                'review': review,
+                'new_average_rating': listing.rating
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to add review: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
-    def get_author_plugins(self, author_wallet: str) -> List[PluginListing]:
-        """Get all plugins by an author"""
-        return [
-            listing for listing in self.listings.values()
-            if listing.author == author_wallet
-        ]
+    async def update_listing(self, listing_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update a marketplace listing.
+        
+        Args:
+            listing_id: ID of the listing to update
+            updates: Fields to update
+            
+        Returns:
+            Update result
+        """
+        try:
+            listing = self.listings.get(listing_id)
+            if not listing:
+                return {
+                    'success': False,
+                    'error': 'Listing not found'
+                }
+            
+            # Update allowed fields
+            allowed_fields = ['title', 'description', 'content', 'tags', 'pricing']
+            for field, value in updates.items():
+                if field in allowed_fields:
+                    setattr(listing, field, value)
+            
+            listing.updated_at = datetime.now().isoformat()
+            
+            logger.info(f"Updated listing: {listing_id}")
+            
+            return {
+                'success': True,
+                'listing': asdict(listing)
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to update listing: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
-    async def update_plugin_listing(self, plugin_id: str, updates: Dict[str, Any]) -> bool:
-        """Update a plugin listing"""
-        if plugin_id not in self.listings:
-            return False
+    async def delete_listing(self, listing_id: str, author_wallet: str) -> Dict[str, Any]:
+        """
+        Delete a marketplace listing.
         
-        listing = self.listings[plugin_id]
-        
-        # Update allowed fields
-        allowed_fields = ["price_zippycoin", "description", "tags", "version"]
-        for field, value in updates.items():
-            if field in allowed_fields:
-                setattr(listing, field, value)
-        
-        listing.updated_at = datetime.now().isoformat()
-        self._save_cache()
-        
-        return True
+        Args:
+            listing_id: ID of the listing to delete
+            author_wallet: Author's wallet address for verification
+            
+        Returns:
+            Delete result
+        """
+        try:
+            listing = self.listings.get(listing_id)
+            if not listing:
+                return {
+                    'success': False,
+                    'error': 'Listing not found'
+                }
+            
+            if listing.author_wallet != author_wallet:
+                return {
+                    'success': False,
+                    'error': 'Unauthorized to delete this listing'
+                }
+            
+            # Remove listing
+            del self.listings[listing_id]
+            
+            logger.info(f"Deleted listing: {listing_id}")
+            
+            return {
+                'success': True,
+                'deleted_listing_id': listing_id
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to delete listing: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
     
-    def remove_plugin_listing(self, plugin_id: str, author_wallet: str) -> bool:
-        """Remove a plugin listing (only by author)"""
-        listing = self.listings.get(plugin_id)
-        if not listing or listing.author != author_wallet:
-            return False
-        
-        listing.status = "inactive"
-        listing.updated_at = datetime.now().isoformat()
-        self._save_cache()
-        
-        return True
-    
-    def get_marketplace_stats(self) -> Dict[str, Any]:
-        """Get marketplace statistics"""
+    async def get_marketplace_stats(self) -> Dict[str, Any]:
+        """Get marketplace statistics."""
         total_listings = len(self.listings)
-        active_listings = len([l for l in self.listings.values() if l.status == "active"])
-        total_downloads = sum(l.download_count for l in self.listings.values())
-        total_volume = sum(tx.amount for tx in self.transactions if tx.status == "completed")
+        total_transactions = len([t for t in self.transactions.values() if t.status == 'completed'])
+        total_volume = sum(t.amount for t in self.transactions.values() if t.status == 'completed')
+        
+        # Category breakdown
+        category_stats = {}
+        for listing in self.listings.values():
+            if listing.category not in category_stats:
+                category_stats[listing.category] = {
+                    'count': 0,
+                    'total_purchases': 0,
+                    'avg_rating': 0.0
+                }
+            category_stats[listing.category]['count'] += 1
+            category_stats[listing.category]['total_purchases'] += listing.purchase_count
+        
+        # Calculate average ratings
+        for category in category_stats:
+            category_listings = [l for l in self.listings.values() if l.category == category]
+            if category_listings:
+                avg_rating = sum(l.rating for l in category_listings) / len(category_listings)
+                category_stats[category]['avg_rating'] = round(avg_rating, 2)
         
         return {
-            "total_listings": total_listings,
-            "active_listings": active_listings,
-            "total_downloads": total_downloads,
-            "total_volume_zippycoin": total_volume,
-            "average_trust_score": sum(l.trust_score for l in self.listings.values()) / max(len(self.listings), 1),
-            "last_updated": datetime.now().isoformat()
+            'total_listings': total_listings,
+            'total_transactions': total_transactions,
+            'total_volume': total_volume,
+            'category_stats': category_stats,
+            'top_categories': sorted(category_stats.items(), key=lambda x: x[1]['count'], reverse=True)[:5]
         }
+    
+    async def get_user_listings(self, wallet_address: str) -> List[MarketplaceListing]:
+        """Get listings by a specific user."""
+        return [
+            listing for listing in self.listings.values()
+            if listing.author_wallet == wallet_address
+        ]
+    
+    async def get_user_purchases(self, wallet_address: str) -> List[PurchaseTransaction]:
+        """Get purchase history for a specific user."""
+        return [
+            transaction for transaction in self.transactions.values()
+            if transaction.buyer_wallet == wallet_address and transaction.status == 'completed'
+        ]
+    
+    async def export_marketplace_data(self, format: str = 'json') -> str:
+        """Export marketplace data in specified format."""
+        if format == 'json':
+            data = {
+                'listings': [asdict(listing) for listing in self.listings.values()],
+                'transactions': [asdict(transaction) for transaction in self.transactions.values()],
+                'exported_at': datetime.now().isoformat()
+            }
+            return json.dumps(data, indent=2)
+        else:
+            raise ValueError(f"Unsupported export format: {format}")

@@ -133,6 +133,27 @@ async def lifespan(app: FastAPI):
         # MCP Client functionality removed from architecture
         # Agents now use MCP tools directly
 
+        # Start Phase 3 services
+        try:
+            api_logger.info("🚀 Starting Phase 3 services...")
+
+            # Start real-time collaboration service
+            from .services.realtime_collaboration_service import realtime_collaboration_service
+            await realtime_collaboration_service.start()
+            api_logger.info("✅ Real-time collaboration service started")
+
+            # Initialize other Phase 3 services (they don't need async startup)
+            from .services.task_prioritization_service import task_prioritization_service
+            from .services.smart_suggestions_service import smart_suggestions_service
+            from .services.task_dependency_service import task_dependency_service
+            from .services.progress_tracking_service import progress_tracking_service
+            from .services.team_collaboration_service import team_collaboration_service
+
+            api_logger.info("✅ All Phase 3 services initialized")
+
+        except Exception as e:
+            api_logger.warning(f"Could not initialize Phase 3 services: {e}")
+
         # Mark initialization as complete
         _initialization_complete = True
         api_logger.info("🎉 Archon backend started successfully!")
@@ -163,6 +184,14 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             api_logger.warning("Could not cleanup background task manager", error=str(e))
 
+        # Stop Phase 3 services
+        try:
+            from .services.realtime_collaboration_service import realtime_collaboration_service
+            await realtime_collaboration_service.stop()
+            api_logger.info("Phase 3 services stopped")
+        except Exception as e:
+            api_logger.warning(f"Could not stop Phase 3 services: {e}")
+
         api_logger.info("✅ Cleanup completed")
 
     except Exception as e:
@@ -187,21 +216,42 @@ app.add_middleware(
 )
 
 
-# Add middleware to skip logging for health checks
-@app.middleware("http")
-async def skip_health_check_logs(request, call_next):
-    # Skip logging for health check endpoints
-    if request.url.path in ["/health", "/api/health"]:
-        # Temporarily suppress the log
-        import logging
+# Import middleware
+from .middleware.auth_middleware import (
+    AuthMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    RequestLoggingMiddleware,
+    ErrorHandlingMiddleware
+)
 
-        logger = logging.getLogger("uvicorn.access")
-        old_level = logger.level
-        logger.setLevel(logging.ERROR)
-        response = await call_next(request)
-        logger.setLevel(old_level)
-        return response
-    return await call_next(request)
+# Initialize middleware
+auth_middleware = AuthMiddleware()
+rate_limit_middleware = RateLimitMiddleware()
+security_headers_middleware = SecurityHeadersMiddleware()
+request_logging_middleware = RequestLoggingMiddleware()
+error_handling_middleware = ErrorHandlingMiddleware()
+
+# Add comprehensive middleware stack
+@app.middleware("http")
+async def error_handling(request, call_next):
+    return await error_handling_middleware(request, call_next)
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    return await security_headers_middleware(request, call_next)
+
+@app.middleware("http")
+async def rate_limiting(request, call_next):
+    return await rate_limit_middleware(request, call_next)
+
+@app.middleware("http")
+async def authentication(request, call_next):
+    return await auth_middleware(request, call_next)
+
+@app.middleware("http")
+async def request_logging(request, call_next):
+    return await request_logging_middleware(request, call_next)
 
 
 # Include API routers
@@ -215,6 +265,21 @@ app.include_router(agent_chat_router)
 app.include_router(internal_router)
 app.include_router(coverage_router)
 app.include_router(bug_report_router)
+
+# Include new Phase 3 API routers
+from .api.task_prioritization_api import router as task_prioritization_router
+from .api.realtime_collaboration_api import router as realtime_collaboration_router
+from .api.smart_suggestions_api import router as smart_suggestions_router
+from .api.task_dependency_api import router as task_dependency_router
+from .api.progress_tracking_api import router as progress_tracking_router
+from .api.team_collaboration_api import router as team_collaboration_router
+
+app.include_router(task_prioritization_router)
+app.include_router(realtime_collaboration_router)
+app.include_router(smart_suggestions_router)
+app.include_router(task_dependency_router)
+app.include_router(progress_tracking_router)
+app.include_router(team_collaboration_router)
 
 
 # Root endpoint

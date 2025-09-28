@@ -140,14 +140,22 @@ def load_environment_config() -> EnvironmentConfig:
     # OpenAI API key is optional at startup - can be set via API
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
-    # Required environment variables for database access
-    supabase_url = os.getenv("SUPABASE_URL")
-    if not supabase_url:
-        raise ConfigurationError("SUPABASE_URL environment variable is required")
+    # Database configuration - support multiple database types
+    database_type = os.getenv("DATABASE_TYPE", "sqlite").lower()
 
-    supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY")
-    if not supabase_service_key:
-        raise ConfigurationError("SUPABASE_SERVICE_KEY environment variable is required")
+    if database_type == "supabase":
+        # Supabase configuration
+        supabase_url = os.getenv("SUPABASE_URL")
+        if not supabase_url:
+            raise ConfigurationError("SUPABASE_URL environment variable is required for Supabase")
+
+        supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY")
+        if not supabase_service_key:
+            raise ConfigurationError("SUPABASE_SERVICE_KEY environment variable is required for Supabase")
+    else:
+        # Local database configuration
+        supabase_url = "http://localhost:5432"  # Placeholder for local databases
+        supabase_service_key = "local-development-key"  # Placeholder for local databases
 
     # Validate required fields
     if openai_api_key:

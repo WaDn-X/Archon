@@ -1,0 +1,25 @@
+{
+  "name": "zippy-archon-frontend-tests",
+  "version": "1.0.0",
+  "description": "Frontend unit tests for Zippy Archon platform",
+  "scripts": {
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "test:watch": "vitest --watch"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/user-event": "^14.5.1",
+    "@vitest/ui": "^1.0.4",
+    "vitest": "^1.0.4",
+    "jsdom": "^23.0.1",
+    "@types/testing-library__jest-dom": "^5.14.9"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.1"
+  }
+}

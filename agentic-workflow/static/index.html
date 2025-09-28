@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zippy-Archon Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 300px;
+            background-color: #1f2937;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -150px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 14px;
+            line-height: 1.4;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #1f2937 transparent transparent transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        .info-icon {
+            color: #6b7280;
+            cursor: help;
+            margin-left: 8px;
+        }
+        .info-icon:hover {
+            color: #3b82f6;
+        }
+        .feature-explanation {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 1px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online { background-color: #10b981; }
+        .status-offline { background-color: #ef4444; }
+        .status-warning { background-color: #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-rocket text-2xl mr-3"></i>
+                    <h1 class="text-xl font-bold">Zippy-Archon Platform</h1>
+                    <div class="tooltip ml-3">
+                        <i class="fas fa-info-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>Zippy-Archon Platform</strong><br>
+                            An AI-powered requirements engineering platform that combines multiple AI providers, 
+                            A/B testing, trust validation, and marketplace features to help you generate, 
+                            validate, and optimize software requirements and specifications.
+                        </span>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm">🚀 AI-Powered Requirements Engineering</span>
+                    <div class="tooltip">
+                        <i class="fas fa-question-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>What is Requirements Engineering?</strong><br>
+                            The process of defining, documenting, and maintaining software requirements. 
+                            This platform uses AI to automate and enhance this process, making it faster, 
+                            more accurate, and more comprehensive than traditional methods.
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Welcome Section -->
+        <div class="feature-explanation">
+            <div class="flex items-start">
+                <i class="fas fa-lightbulb text-blue-500 text-xl mr-3 mt-1"></i>
+                <div>
+                    <h2 class="text-lg font-semibold text-blue-900 mb-2">Welcome to Zippy-Archon Platform</h2>
+                    <p class="text-blue-800 mb-3">
+                        This platform helps you generate, test, and validate software requirements using advanced AI technology. 
+                        Each feature below serves a specific purpose in the requirements engineering workflow.
+                    </p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div class="bg-white bg-opacity-50 p-3 rounded">
+                            <strong>🤖 Multi-AI Integration:</strong> Uses Grok, OpenAI, Anthropic, and Zippy AI for diverse perspectives
+                        </div>
+                        <div class="bg-white bg-opacity-50 p-3 rounded">
+                            <strong>📊 A/B Testing:</strong> Compare different prompt versions to find the best approach
+                        </div>
+                        <div class="bg-white bg-opacity-50 p-3 rounded">
+                            <strong>🛡️ Trust Validation:</strong> Ensure content quality and security with ZippyTrust
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Banner -->
+        <div id="statusBanner" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    <span>Platform is running successfully on localhost:8686</span>
+                </div>
+                <div class="tooltip">
+                    <i class="fas fa-info-circle info-icon"></i>
+                    <span class="tooltiptext">
+                        <strong>Platform Status</strong><br>
+                        This indicator shows the overall health of the platform. 
+                        Green means all core services are operational. 
+                        You can click "Check Health" below for detailed service status.
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Requirements Generation -->
+            <div class="bg-white rounded-lg shadow-md card-hover p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-file-alt text-blue-500 text-2xl mr-3"></i>
+                    <h3 class="text-lg font-semibold">Requirements Generation</h3>
+                    <div class="tooltip">
+                        <i class="fas fa-info-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>Requirements Generation</strong><br>
+                            <strong>What it does:</strong> Converts your feature descriptions into comprehensive software requirements, design documents, and task breakdowns.<br><br>
+                            <strong>How it works:</strong> Uses AI to analyze your input and generate structured documents including functional requirements, technical specifications, and implementation tasks.<br><br>
+                            <strong>When to use:</strong> When starting a new feature or project, or when you need to formalize informal requirements.
+                        </span>
+                    </div>
+                </div>
+                <p class="text-gray-600 mb-4">Generate comprehensive requirements, design, and tasks using multi-provider AI.</p>
+                <div class="mb-4 text-sm text-gray-500">
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>AI Providers: Grok, OpenAI, Claude, Zippy</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Output: Requirements, Design, Tasks</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="status-indicator status-online"></span>
+                        <span>Format: Structured Markdown</span>
+                    </div>
+                </div>
+                <button onclick="showRequirementsForm()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded">
+                    Generate Specs
+                </button>
+            </div>
+
+            <!-- A/B Testing -->
+            <div class="bg-white rounded-lg shadow-md card-hover p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-chart-line text-green-500 text-2xl mr-3"></i>
+                    <h3 class="text-lg font-semibold">A/B Testing</h3>
+                    <div class="tooltip">
+                        <i class="fas fa-info-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>A/B Testing for Requirements</strong><br>
+                            <strong>What it does:</strong> Compares different versions of your requirements to find the most effective approach.<br><br>
+                            <strong>How it works:</strong> Generates multiple versions of your requirements using different prompts or AI providers, then scores them using VoidSpec metrics and ZippyTrust validation.<br><br>
+                            <strong>When to use:</strong> When you want to optimize your requirements for clarity, completeness, or stakeholder approval.
+                        </span>
+                    </div>
+                </div>
+                <p class="text-gray-600 mb-4">Compare different prompt versions with enhanced rubric scoring and ZippyTrust validation.</p>
+                <div class="mb-4 text-sm text-gray-500">
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Metrics: Clarity, Structure, Testability</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Validation: ZippyTrust Security</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="status-indicator status-online"></span>
+                        <span>Output: Winner Selection + Scores</span>
+                    </div>
+                </div>
+                <button onclick="showABTestingForm()" class="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded">
+                    Run A/B Test
+                </button>
+            </div>
+
+            <!-- Marketplace -->
+            <div class="bg-white rounded-lg shadow-md card-hover p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-store text-purple-500 text-2xl mr-3"></i>
+                    <h3 class="text-lg font-semibold">Marketplace</h3>
+                    <div class="tooltip">
+                        <i class="fas fa-info-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>ZippyCoin Marketplace</strong><br>
+                            <strong>What it does:</strong> A marketplace for trading development assets like requirements templates, A/B test results, and validated specifications.<br><br>
+                            <strong>How it works:</strong> Users can publish their successful requirements or purchase proven templates from others using ZippyCoin currency.<br><br>
+                            <strong>When to use:</strong> When you want to share successful patterns or find proven templates for common requirements.
+                        </span>
+                    </div>
+                </div>
+                <p class="text-gray-600 mb-4">Browse and trade development assets with ZippyCoin integration.</p>
+                <div class="mb-4 text-sm text-gray-500">
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-warning"></span>
+                        <span>Currency: ZippyCoin (ZC)</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Assets: Templates, Test Results</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="status-indicator status-online"></span>
+                        <span>Trust: Validated Content Only</span>
+                    </div>
+                </div>
+                <button onclick="showMarketplace()" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded">
+                    Browse Marketplace
+                </button>
+            </div>
+
+            <!-- Trust Validation -->
+            <div class="bg-white rounded-lg shadow-md card-hover p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-shield-alt text-red-500 text-2xl mr-3"></i>
+                    <h3 class="text-lg font-semibold">Trust Validation</h3>
+                    <div class="tooltip">
+                        <i class="fas fa-info-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>ZippyTrust Validation</strong><br>
+                            <strong>What it does:</strong> Analyzes your content for quality, security, and compliance using advanced AI validation.<br><br>
+                            <strong>How it works:</strong> Combines VoidSpec metrics (clarity, structure, testability) with security checks and community trust scoring.<br><br>
+                            <strong>When to use:</strong> Before publishing content to the marketplace or when you need to ensure your requirements meet quality standards.
+                        </span>
+                    </div>
+                </div>
+                <p class="text-gray-600 mb-4">Validate content quality and security using ZippyTrust.</p>
+                <div class="mb-4 text-sm text-gray-500">
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>VoidSpec Metrics: 4 Dimensions</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Security: Code Quality, Safety</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="status-indicator status-online"></span>
+                        <span>Output: Trust Score + Insights</span>
+                    </div>
+                </div>
+                <button onclick="showTrustValidation()" class="w-full bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded">
+                    Validate Content
+                </button>
+            </div>
+
+            <!-- API Documentation -->
+            <div class="bg-white rounded-lg shadow-md card-hover p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-book text-indigo-500 text-2xl mr-3"></i>
+                    <h3 class="text-lg font-semibold">API Documentation</h3>
+                    <div class="tooltip">
+                        <i class="fas fa-info-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>REST API Documentation</strong><br>
+                            <strong>What it does:</strong> Interactive documentation for all platform endpoints.<br><br>
+                            <strong>How it works:</strong> Swagger/OpenAPI documentation that lets you test API calls directly in the browser.<br><br>
+                            <strong>When to use:</strong> When integrating the platform with other tools or building custom interfaces.
+                        </span>
+                    </div>
+                </div>
+                <p class="text-gray-600 mb-4">Explore the comprehensive REST API with interactive documentation.</p>
+                <div class="mb-4 text-sm text-gray-500">
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Format: OpenAPI 3.0</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Testing: Interactive Console</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="status-indicator status-online"></span>
+                        <span>Authentication: JWT Tokens</span>
+                    </div>
+                </div>
+                <a href="/docs" target="_blank" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-medium py-2 px-4 rounded inline-block text-center">
+                    View API Docs
+                </a>
+            </div>
+
+            <!-- Health Check -->
+            <div class="bg-white rounded-lg shadow-md card-hover p-6">
+                <div class="flex items-center mb-4">
+                    <i class="fas fa-heartbeat text-pink-500 text-2xl mr-3"></i>
+                    <h3 class="text-lg font-semibold">System Health</h3>
+                    <div class="tooltip">
+                        <i class="fas fa-info-circle info-icon"></i>
+                        <span class="tooltiptext">
+                            <strong>System Health Monitor</strong><br>
+                            <strong>What it does:</strong> Real-time monitoring of all platform services and components.<br><br>
+                            <strong>How it works:</strong> Checks the status of AI providers, database connections, and other critical services.<br><br>
+                            <strong>When to use:</strong> When troubleshooting issues or verifying that all services are operational.
+                        </span>
+                    </div>
+                </div>
+                <p class="text-gray-600 mb-4">Monitor platform services and performance metrics.</p>
+                <div class="mb-4 text-sm text-gray-500">
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Real-time Monitoring</span>
+                    </div>
+                    <div class="flex items-center mb-1">
+                        <span class="status-indicator status-online"></span>
+                        <span>Service Status: AI, DB, Trust</span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="status-indicator status-online"></span>
+                        <span>Performance Metrics</span>
+                    </div>
+                </div>
+                <button onclick="checkHealth()" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-medium py-2 px-4 rounded">
+                    Check Health
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">Results</h3>
+                    <button onclick="clearResults()" class="text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+                </div>
+                <div id="resultsContent" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals with Enhanced Tooltips -->
+    <!-- Requirements Generation Modal -->
+    <div id="requirementsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+                <div class="flex justify-between items-center p-6 border-b">
+                    <h3 class="text-lg font-semibold">Generate Requirements</h3>
+                    <button onclick="closeModal('requirementsModal')" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p class="text-sm text-blue-800">
+                            <i class="fas fa-lightbulb mr-2"></i>
+                            <strong>Tip:</strong> Be specific about your feature. Include user stories, technical constraints, and desired outcomes for better results.
+                        </p>
+                    </div>
+                    <form id="requirementsForm">
+                        <div class="mb-4">
+                            <label class="block text-gray-700 text-sm font-bold mb-2">
+                                Feature Description
+                                <div class="tooltip inline">
+                                    <i class="fas fa-info-circle info-icon"></i>
+                                    <span class="tooltiptext">
+                                        <strong>Feature Description</strong><br>
+                                        Describe what you want to build in detail. Include:<br>
+                                        • User goals and use cases<br>
+                                        • Technical requirements<br>
+                                        • Constraints and limitations<br>
+                                        • Success criteria<br><br>
+                                        Example: "Build a user authentication system that supports email/password login, social login (Google, Facebook), and two-factor authentication."
+                                    </span>
+                                </div>
+                            </label>
+                            <textarea id="prompt" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Describe the feature you want to generate requirements for..."></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">
+                                    AI Provider
+                                    <div class="tooltip inline">
+                                        <i class="fas fa-info-circle info-icon"></i>
+                                        <span class="tooltiptext">
+                                            <strong>AI Provider Selection</strong><br>
+                                            <strong>Grok AI:</strong> Real-time, creative, good for innovative features<br>
+                                            <strong>OpenAI GPT-4:</strong> Comprehensive, detailed, industry standard<br>
+                                            <strong>Anthropic Claude:</strong> Analytical, safety-focused, good for complex logic<br>
+                                            <strong>Zippy AI:</strong> Custom models, optimized for requirements
+                                        </span>
+                                    </div>
+                                </label>
+                                <select id="provider" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="grok">Grok AI</option>
+                                    <option value="openai">OpenAI GPT-4</option>
+                                    <option value="anthropic">Anthropic Claude</option>
+                                    <option value="zippy">Zippy AI</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 text-sm font-bold mb-2">
+                                    Version
+                                    <div class="tooltip inline">
+                                        <i class="fas fa-info-circle info-icon"></i>
+                                        <span class="tooltiptext">
+                                            <strong>Prompt Version</strong><br>
+                                            <strong>Version 1:</strong> Standard requirements format<br>
+                                            <strong>Version 2:</strong> Enhanced with user stories and acceptance criteria<br>
+                                            <strong>Enhanced:</strong> Comprehensive with technical specifications and implementation details
+                                        </span>
+                                    </div>
+                                </label>
+                                <select id="version" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="v1">Version 1</option>
+                                    <option value="v2">Version 2</option>
+                                    <option value="enhanced">Enhanced</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeModal('requirementsModal')" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+                                Generate
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- A/B Testing Modal -->
+    <div id="abTestingModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+                <div class="flex justify-between items-center p-6 border-b">
+                    <h3 class="text-lg font-semibold">A/B Testing</h3>
+                    <button onclick="closeModal('abTestingModal')" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded">
+                        <p class="text-sm text-green-800">
+                            <i class="fas fa-chart-line mr-2"></i>
+                            <strong>Tip:</strong> A/B testing helps you find the most effective way to express your requirements. Test different approaches to see which generates better results.
+                        </p>
+                    </div>
+                    <form id="abTestingForm">
+                        <div class="mb-4">
+                            <label class="block text-gray-700 text-sm font-bold mb-2">
+                                Test Prompt
+                                <div class="tooltip inline">
+                                    <i class="fas fa-info-circle info-icon"></i>
+                                    <span class="tooltiptext">
+                                        <strong>Test Prompt</strong><br>
+                                        Enter the base prompt that will be tested in different versions. 
+                                        The system will generate variations and compare their effectiveness 
+                                        using VoidSpec metrics and ZippyTrust validation.
+                                    </span>
+                                </div>
+                            </label>
+                            <textarea id="abPrompt" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter the prompt to test..."></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-gray-700 text-sm font-bold mb-2">
+                                Versions to Test
+                                <div class="tooltip inline">
+                                    <i class="fas fa-info-circle info-icon"></i>
+                                    <span class="tooltiptext">
+                                        <strong>Version Selection</strong><br>
+                                        <strong>Version 1:</strong> Standard approach<br>
+                                        <strong>Version 2:</strong> Alternative phrasing<br>
+                                        <strong>Enhanced:</strong> Comprehensive with examples and edge cases
+                                    </span>
+                                </div>
+                            </label>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="v1" checked class="mr-2">
+                                    Version 1
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="v2" checked class="mr-2">
+                                    Version 2
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" value="enhanced" class="mr-2">
+                                    Enhanced Version
+                                </label>
+                            </div>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeModal('abTestingModal')" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="submit" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">
+                                Run Test
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen">
+            <div class="bg-white rounded-lg p-6">
+                <div class="flex items-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+                    <span>Processing...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8686';
+
+        // Modal functions
+        function showRequirementsForm() {
+            document.getElementById('requirementsModal').classList.remove('hidden');
+        }
+
+        function showABTestingForm() {
+            document.getElementById('abTestingModal').classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        function showResults(content) {
+            document.getElementById('resultsSection').classList.remove('hidden');
+            document.getElementById('resultsContent').innerHTML = content;
+        }
+
+        function clearResults() {
+            document.getElementById('resultsSection').classList.add('hidden');
+            document.getElementById('resultsContent').innerHTML = '';
+        }
+
+        // API Functions
+        async function generateRequirements(formData) {
+            try {
+                showLoading();
+                const response = await fetch(`${API_BASE}/api/v1/specs/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+                hideLoading();
+
+                if (result.success) {
+                    const content = `
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                            <h4 class="font-semibold text-green-800 mb-2">✅ Requirements Generated Successfully</h4>
+                            <p class="text-green-700">Provider: ${result.provider} | Version: ${result.version}</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <h5 class="font-semibold text-blue-800 mb-2">Requirements</h5>
+                                <pre class="text-sm text-blue-700 whitespace-pre-wrap">${result.requirements.content}</pre>
+                            </div>
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <h5 class="font-semibold text-green-800 mb-2">Design</h5>
+                                <pre class="text-sm text-green-700 whitespace-pre-wrap">${result.design.content}</pre>
+                            </div>
+                            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                <h5 class="font-semibold text-purple-800 mb-2">Tasks</h5>
+                                <pre class="text-sm text-purple-700 whitespace-pre-wrap">${result.tasks.content}</pre>
+                            </div>
+                        </div>
+                    `;
+                    showResults(content);
+                } else {
+                    throw new Error(result.error || 'Generation failed');
+                }
+            } catch (error) {
+                hideLoading();
+                showResults(`<div class="bg-red-50 border border-red-200 rounded-lg p-4"><p class="text-red-700">Error: ${error.message}</p></div>`);
+            }
+        }
+
+        async function runABTest(formData) {
+            try {
+                showLoading();
+                const response = await fetch(`${API_BASE}/api/v1/ab-test/run`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+                hideLoading();
+
+                if (result.success) {
+                    const content = `
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                            <h4 class="font-semibold text-green-800 mb-2">✅ A/B Test Completed</h4>
+                            <p class="text-green-700">Test ID: ${result.test_id}</p>
+                        </div>
+                        <div class="bg-white border border-gray-200 rounded-lg p-4">
+                            <h5 class="font-semibold text-gray-800 mb-2">Results</h5>
+                            <div class="mb-4">
+                                <span class="font-medium">Winner: </span>
+                                <span class="bg-green-100 text-green-800 px-2 py-1 rounded">${result.results.winner}</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                ${Object.entries(result.results.scores).map(([version, score]) => `
+                                    <div class="bg-gray-50 p-3 rounded">
+                                        <span class="font-medium">${version}:</span>
+                                        <span class="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded">${score}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                    showResults(content);
+                } else {
+                    throw new Error(result.error || 'A/B test failed');
+                }
+            } catch (error) {
+                hideLoading();
+                showResults(`<div class="bg-red-50 border border-red-200 rounded-lg p-4"><p class="text-red-700">Error: ${error.message}</p></div>`);
+            }
+        }
+
+        async function showMarketplace() {
+            try {
+                showLoading();
+                const response = await fetch(`${API_BASE}/api/v1/marketplace/listings`);
+                const result = await response.json();
+                hideLoading();
+
+                const content = `
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-semibold text-blue-800 mb-2">🏪 Marketplace</h4>
+                        <p class="text-blue-700">Total listings: ${result.total}</p>
+                    </div>
+                    <div class="space-y-4">
+                        ${result.listings.map(listing => `
+                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h5 class="font-semibold text-gray-800">${listing.title}</h5>
+                                        <p class="text-gray-600 text-sm">${listing.description}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-lg font-bold text-green-600">${listing.price} ZC</div>
+                                        <div class="text-sm text-gray-500">Trust: ${listing.trust_score}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                showResults(content);
+            } catch (error) {
+                hideLoading();
+                showResults(`<div class="bg-red-50 border border-red-200 rounded-lg p-4"><p class="text-red-700">Error: ${error.message}</p></div>`);
+            }
+        }
+
+        async function showTrustValidation() {
+            const content = `
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                    <h4 class="font-semibold text-red-800 mb-2">🛡️ Trust Validation</h4>
+                    <p class="text-red-700">Enter content to validate with ZippyTrust</p>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <textarea id="validationContent" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 mb-4" placeholder="Enter content to validate..."></textarea>
+                    <button onclick="validateContent()" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded">
+                        Validate Content
+                    </button>
+                </div>
+            `;
+            showResults(content);
+        }
+
+        async function validateContent() {
+            const content = document.getElementById('validationContent').value;
+            if (!content.trim()) {
+                alert('Please enter content to validate');
+                return;
+            }
+
+            try {
+                showLoading();
+                const response = await fetch(`${API_BASE}/api/v1/trust/validate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ content: content, content_type: 'requirements' })
+                });
+
+                const result = await response.json();
+                hideLoading();
+
+                if (result.success) {
+                    const content = `
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                            <h4 class="font-semibold text-green-800 mb-2">✅ Content Validated</h4>
+                            <p class="text-green-700">Trust Score: ${result.trust_score} | Level: ${result.trust_level}</p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                <h5 class="font-semibold text-gray-800 mb-2">Metrics</h5>
+                                <div class="space-y-2">
+                                    ${Object.entries(result.metrics).map(([metric, score]) => `
+                                        <div class="flex justify-between">
+                                            <span class="capitalize">${metric}:</span>
+                                            <span class="font-medium">${score}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="bg-white border border-gray-200 rounded-lg p-4">
+                                <h5 class="font-semibold text-gray-800 mb-2">Insights</h5>
+                                <ul class="list-disc list-inside space-y-1">
+                                    ${result.insights.map(insight => `<li class="text-gray-700">${insight}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                    showResults(content);
+                } else {
+                    throw new Error(result.error || 'Validation failed');
+                }
+            } catch (error) {
+                hideLoading();
+                showResults(`<div class="bg-red-50 border border-red-200 rounded-lg p-4"><p class="text-red-700">Error: ${error.message}</p></div>`);
+            }
+        }
+
+        async function checkHealth() {
+            try {
+                showLoading();
+                const response = await fetch(`${API_BASE}/health`);
+                const result = await response.json();
+                hideLoading();
+
+                const content = `
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <h4 class="font-semibold text-green-800 mb-2">💚 System Health Check</h4>
+                        <p class="text-green-700">Status: ${result.status} | Timestamp: ${result.timestamp}</p>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-lg p-4">
+                        <h5 class="font-semibold text-gray-800 mb-2">Services Status</h5>
+                        <div class="grid grid-cols-2 gap-4">
+                            ${Object.entries(result.services).map(([service, status]) => `
+                                <div class="flex items-center">
+                                    <span class="font-medium capitalize">${service.replace('_', ' ')}:</span>
+                                    <span class="ml-2 ${status ? 'text-green-600' : 'text-red-600'}">
+                                        <i class="fas fa-${status ? 'check' : 'times'}"></i>
+                                        ${status ? 'Online' : 'Offline'}
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                showResults(content);
+            } catch (error) {
+                hideLoading();
+                showResults(`<div class="bg-red-50 border border-red-200 rounded-lg p-4"><p class="text-red-700">Error: ${error.message}</p></div>`);
+            }
+        }
+
+        // Event Listeners
+        document.getElementById('requirementsForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = {
+                prompt: document.getElementById('prompt').value,
+                provider: document.getElementById('provider').value,
+                version: document.getElementById('version').value
+            };
+            generateRequirements(formData);
+            closeModal('requirementsModal');
+        });
+
+        document.getElementById('abTestingForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const versions = Array.from(document.querySelectorAll('#abTestingForm input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+            const formData = {
+                prompt: document.getElementById('abPrompt').value,
+                versions: versions
+            };
+            runABTest(formData);
+            closeModal('abTestingModal');
+        });
+
+        // Close modals when clicking outside
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('fixed')) {
+                e.target.classList.add('hidden');
+            }
+        });
+
+        // Initial health check
+        checkHealth();
+    </script>
+</body>
+</html>

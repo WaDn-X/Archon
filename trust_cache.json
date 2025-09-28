@@ -1,0 +1,19 @@
+{
+  "test_hash": {
+    "plugin_id": "test_plugin",
+    "zippy_trust_score": 0.55,
+    "verification_status": "flagged",
+    "audit_trail": [],
+    "reputation_score": 0.5,
+    "usage_count": 0,
+    "last_updated": "2025-09-12T22:14:56.008180",
+    "author": "test_author",
+    "version": "1.0.0",
+    "security_checks": {
+      "code_analysis": false,
+      "dependency_check": false,
+      "malware_scan": false
+    },
+    "code_quality_score": 0.0
+  }
+}

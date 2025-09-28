@@ -24,6 +24,7 @@
     "@milkdown/preset-commonmark": "^7.5.0",
     "@xyflow/react": "^12.3.0",
     "clsx": "latest",
+    "tailwind-merge": "^2.3.0",
     "date-fns": "^4.1.0",
     "fractional-indexing": "^3.2.0",
     "framer-motion": "^11.5.4",

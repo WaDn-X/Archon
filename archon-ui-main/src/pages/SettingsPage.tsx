@@ -22,6 +22,7 @@ import { RAGSettings } from "../components/settings/RAGSettings";
 import { CodeExtractionSettings } from "../components/settings/CodeExtractionSettings";
 import { TestStatus } from "../components/settings/TestStatus";
 import { IDEGlobalRules } from "../components/settings/IDEGlobalRules";
+import { ThemeSettings } from "../components/settings/ThemeSettings";
 import { ButtonPlayground } from "../components/settings/ButtonPlayground";
 import { CollapsibleSettingsCard } from "../components/ui/CollapsibleSettingsCard";
 import { BugReportButton } from "../components/bug-report/BugReportButton";
@@ -129,9 +130,20 @@ export const SettingsPage = () => {
         <div className="space-y-6">
           <motion.div variants={itemVariants}>
             <CollapsibleSettingsCard
-              title="Features"
+              title="Appearance"
               icon={Palette}
               accentColor="purple"
+              storageKey="appearance"
+              defaultExpanded={true}
+            >
+              <ThemeSettings />
+            </CollapsibleSettingsCard>
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <CollapsibleSettingsCard
+              title="Features"
+              icon={Palette}
+              accentColor="blue"
               storageKey="features"
               defaultExpanded={true}
             >

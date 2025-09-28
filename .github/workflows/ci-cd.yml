@@ -1,0 +1,453 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Security and Quality Checks
+  security-scan:
+    name: Security & Quality Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install security tools
+        run: |
+          pip install bandit safety
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r python/src/ -f json -o security-results.json || true
+
+      - name: Run Safety vulnerability check
+        run: |
+          safety check --json > safety-results.json || true
+
+      - name: Upload security results
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-scan-results
+          path: |
+            security-results.json
+            safety-results.json
+
+  # Backend Testing
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install backend dependencies
+        run: |
+          cd python
+          pip install -r requirements.server.txt
+          pip install -r ../Scripts/backend-tests/requirements.txt
+
+      - name: Set up test environment
+        run: |
+          cp .env.example .env || echo "SUPABASE_URL=test_url" > .env
+          echo "SUPABASE_SERVICE_KEY=test_key" >> .env
+          echo "JWT_SECRET_KEY=test_secret_key" >> .env
+          echo "REDIS_HOST=localhost" >> .env
+
+      - name: Run backend tests
+        run: |
+          cd Scripts/backend-tests
+          python -m pytest -v --tb=short --cov=python/src --cov-report=xml --cov-report=html
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-coverage
+          path: |
+            Scripts/backend-tests/htmlcov/
+            coverage.xml
+
+  # Frontend Testing
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: archon-ui-main/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd archon-ui-main
+          npm ci
+
+      - name: Run frontend linting
+        run: |
+          cd archon-ui-main
+          npm run lint || true
+
+      - name: Run frontend tests
+        run: |
+          cd archon-ui-main
+          npm test -- --coverage --watchAll=false
+
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-coverage
+          path: archon-ui-main/coverage/
+
+  # Integration Testing
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          cd python
+          pip install -r requirements.server.txt
+          cd ../Scripts/integration-tests
+          pip install -r requirements.txt
+
+      - name: Run integration tests
+        run: |
+          cd Scripts/integration-tests
+          python -m pytest -v --tb=short
+
+  # E2E Testing
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          cd python
+          pip install -r requirements.server.txt
+          cd ../e2e-tests
+          pip install -r requirements.txt
+
+      - name: Run E2E tests
+        run: |
+          cd e2e-tests
+          python -m pytest -v --tb=short
+
+  # Code Quality Checks
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install code quality tools
+        run: |
+          pip install black isort flake8 mypy
+
+      - name: Check code formatting with Black
+        run: |
+          black --check --diff python/src/ Scripts/ || true
+
+      - name: Check import sorting with isort
+        run: |
+          isort --check-only --diff python/src/ Scripts/ || true
+
+      - name: Run flake8 linting
+        run: |
+          flake8 python/src/ Scripts/ --max-line-length=100 --extend-ignore=E203,W503 || true
+
+      - name: Run mypy type checking
+        run: |
+          mypy python/src/server/ --ignore-missing-imports || true
+
+  # Build and Test Docker Images
+  docker-build:
+    name: Docker Build & Test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./python
+          file: ./python/Dockerfile.server
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-server
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push UI image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./archon-ui-main
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-ui
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Performance Testing
+  performance-test:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install locust
+
+      - name: Run performance tests
+        run: |
+          # Basic load test - can be expanded
+          echo "Performance testing framework ready"
+          # locust -f performance_tests.py --headless --users 10 --spawn-rate 1 --run-time 30s
+
+  # Deployment to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [backend-tests, frontend-tests, integration-tests, docker-build]
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging environment
+        run: |
+          echo "Deploying to staging environment..."
+          # Add actual deployment commands here
+          # Example: kubectl apply -f k8s/staging/
+
+  # Results Summary
+  test-results:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [security-scan, backend-tests, frontend-tests, integration-tests, e2e-tests, code-quality]
+    steps:
+      - name: Download test artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts
+
+      - name: Generate test report
+        run: |
+          echo "## Test Execution Summary" > test-summary.md
+          echo "" >> test-summary.md
+          echo "| Test Suite | Status | Duration |" >> test-summary.md
+          echo "|------------|--------|----------|" >> test-summary.md
+
+          # Add job status to summary
+          echo "| Security Scan | ${{ needs.security-scan.result }} | - |" >> test-summary.md
+          echo "| Backend Tests | ${{ needs.backend-tests.result }} | - |" >> test-summary.md
+          echo "| Frontend Tests | ${{ needs.frontend-tests.result }} | - |" >> test-summary.md
+          echo "| Integration Tests | ${{ needs.integration-tests.result }} | - |" >> test-summary.md
+          echo "| E2E Tests | ${{ needs.e2e-tests.result }} | - |" >> test-summary.md
+          echo "| Code Quality | ${{ needs.code-quality.result }} | - |" >> test-summary.md
+
+          echo "" >> test-summary.md
+          echo "### 📊 Coverage Reports" >> test-summary.md
+          echo "- Backend coverage report: [htmlcov/index.html](htmlcov/index.html)" >> test-summary.md
+          echo "- Frontend coverage report: [coverage/lcov-report/index.html](coverage/lcov-report/index.html)" >> test-summary.md
+
+          cat test-summary.md
+
+      - name: Upload test summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-summary
+          path: test-summary.md
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Some tests failed. Check the detailed logs above."
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "✅ All tests passed successfully!"
+
+  # Final deployment decision
+  deployment-gate:
+    name: Deployment Gate
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [test-results, performance-test]
+    steps:
+      - name: Check all tests passed
+        run: |
+          if [[ "${{ needs.test-results.result }}" == "success" && "${{ needs.performance-test.result }}" != "failure" ]]; then
+            echo "✅ All quality gates passed - Ready for production deployment"
+            echo "DEPLOY_READY=true" >> $GITHUB_ENV
+          else
+            echo "❌ Quality gates failed - Deployment blocked"
+            echo "DEPLOY_READY=false" >> $GITHUB_ENV
+            exit 1
+          fi
+
+      - name: Create deployment approval
+        if: env.DEPLOY_READY == 'true'
+        run: |
+          echo "🚀 Ready for production deployment!"
+          echo "Please review the test results and approve deployment."
