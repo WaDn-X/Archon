@@ -11,7 +11,7 @@ Usage:
     project_service = get_project_service()
 
 Environment Variables:
-    STORAGE_BACKEND: "supabase" (default) or "vespa"
+    STORAGE_BACKEND: "vespa" (default)
     EMBEDDING_PROVIDER: "openai" (default), "voyage", "cohere", or "echo"
 """
 
@@ -24,8 +24,6 @@ logger = get_logger(__name__)
 
 # Type hints for IDE support
 if TYPE_CHECKING:
-    from .project_service import ProjectService
-    from .task_service import TaskService
     from .vespa_project_service import VespaProjectService
     from .vespa_task_service import VespaTaskService
 
@@ -35,57 +33,37 @@ def get_storage_backend() -> str:
     Get the configured storage backend.
 
     Returns:
-        "supabase" or "vespa"
+        "vespa"
     """
-    backend = os.getenv("STORAGE_BACKEND", "supabase").lower()
-    if backend not in ("supabase", "vespa"):
-        logger.warning(f"Invalid STORAGE_BACKEND '{backend}', defaulting to 'supabase'")
-        return "supabase"
+    backend = os.getenv("STORAGE_BACKEND", "vespa").lower()
+    if backend != "vespa":
+        logger.warning(f"Invalid STORAGE_BACKEND '{backend}', defaulting to 'vespa'")
+        return "vespa"
     return backend
 
 
-def get_project_service(supabase_client=None):
+def get_project_service():
     """
     Get the project service based on STORAGE_BACKEND configuration.
 
-    Args:
-        supabase_client: Optional Supabase client (only used if backend is supabase)
-
     Returns:
-        ProjectService or VespaProjectService instance
+        VespaProjectService instance
     """
-    backend = get_storage_backend()
-
-    if backend == "vespa":
-        logger.info("Using Vespa backend for ProjectService")
-        from .vespa_project_service import VespaProjectService
-        return VespaProjectService()
-    else:
-        logger.debug("Using Supabase backend for ProjectService")
-        from .project_service import ProjectService
-        return ProjectService(supabase_client)
+    logger.info("Using Vespa backend for ProjectService")
+    from .vespa_project_service import VespaProjectService
+    return VespaProjectService()
 
 
-def get_task_service(supabase_client=None):
+def get_task_service():
     """
     Get the task service based on STORAGE_BACKEND configuration.
 
-    Args:
-        supabase_client: Optional Supabase client (only used if backend is supabase)
-
     Returns:
-        TaskService or VespaTaskService instance
+        VespaTaskService instance
     """
-    backend = get_storage_backend()
-
-    if backend == "vespa":
-        logger.info("Using Vespa backend for TaskService")
-        from .vespa_task_service import VespaTaskService
-        return VespaTaskService()
-    else:
-        logger.debug("Using Supabase backend for TaskService")
-        from .task_service import TaskService
-        return TaskService(supabase_client)
+    logger.info("Using Vespa backend for TaskService")
+    from .vespa_task_service import VespaTaskService
+    return VespaTaskService()
 
 
 def is_vespa_enabled() -> bool:
@@ -93,9 +71,9 @@ def is_vespa_enabled() -> bool:
     Check if Vespa backend is enabled.
 
     Returns:
-        True if STORAGE_BACKEND is set to "vespa"
+        True (always, as Vespa is the only supported backend)
     """
-    return get_storage_backend() == "vespa"
+    return True
 
 
 def get_backend_info() -> dict:
@@ -105,16 +83,9 @@ def get_backend_info() -> dict:
     Returns:
         Dict with backend info for health checks and debugging
     """
-    backend = get_storage_backend()
-    info = {
-        "storage_backend": backend,
+    return {
+        "storage_backend": "vespa",
         "embedding_provider": os.getenv("EMBEDDING_PROVIDER", "openai"),
+        "vespa_host": os.getenv("VESPA_HOST", "localhost"),
+        "vespa_port": os.getenv("VESPA_PORT", "8081"),
     }
-
-    if backend == "vespa":
-        info["vespa_host"] = os.getenv("VESPA_HOST", "localhost")
-        info["vespa_port"] = os.getenv("VESPA_PORT", "8081")
-    else:
-        info["supabase_url"] = os.getenv("SUPABASE_URL", "not_configured")
-
-    return info

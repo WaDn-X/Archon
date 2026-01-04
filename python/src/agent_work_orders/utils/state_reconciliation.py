@@ -3,6 +3,9 @@
 Utilities to detect and fix inconsistencies between database state and filesystem.
 These tools help identify orphaned worktrees (exist on filesystem but not in database)
 and dangling state (exist in database but worktree deleted).
+
+Note: Supabase backend has been removed. This module now works with in-memory
+or file-based repositories only.
 """
 
 import os
@@ -12,13 +15,16 @@ from typing import Any
 
 from ..config import config
 from ..models import AgentWorkOrderStatus
-from ..state_manager.supabase_repository import SupabaseWorkOrderRepository
+from ..state_manager.work_order_repository import WorkOrderRepository
+from ..state_manager.file_state_repository import FileStateRepository
 from ..utils.structured_logger import get_logger
 
 logger = get_logger(__name__)
 
+RepositoryType = WorkOrderRepository | FileStateRepository
 
-async def find_orphaned_worktrees(repository: SupabaseWorkOrderRepository) -> list[str]:
+
+async def find_orphaned_worktrees(repository: RepositoryType) -> list[str]:
     """Find worktrees that exist on filesystem but not in database.
 
     Orphaned worktrees can occur when:
@@ -27,13 +33,13 @@ async def find_orphaned_worktrees(repository: SupabaseWorkOrderRepository) -> li
     - Manual filesystem operations outside the service
 
     Args:
-        repository: Supabase repository instance to query current state
+        repository: Repository instance to query current state
 
     Returns:
         List of absolute paths to orphaned worktree directories
 
     Example:
-        >>> repository = SupabaseWorkOrderRepository()
+        >>> repository = WorkOrderRepository()
         >>> orphans = await find_orphaned_worktrees(repository)
         >>> print(f"Found {len(orphans)} orphaned worktrees")
     """
@@ -63,7 +69,7 @@ async def find_orphaned_worktrees(repository: SupabaseWorkOrderRepository) -> li
     return [str(worktree_base / name) for name in orphans]
 
 
-async def find_dangling_state(repository: SupabaseWorkOrderRepository) -> list[str]:
+async def find_dangling_state(repository: RepositoryType) -> list[str]:
     """Find database entries with missing worktrees.
 
     Dangling state can occur when:
@@ -72,13 +78,13 @@ async def find_dangling_state(repository: SupabaseWorkOrderRepository) -> list[s
     - Filesystem corruption or disk full errors
 
     Args:
-        repository: Supabase repository instance to query current state
+        repository: Repository instance to query current state
 
     Returns:
         List of work order IDs that have missing worktrees
 
     Example:
-        >>> repository = SupabaseWorkOrderRepository()
+        >>> repository = WorkOrderRepository()
         >>> dangling = await find_dangling_state(repository)
         >>> print(f"Found {len(dangling)} dangling state entries")
     """
@@ -104,7 +110,7 @@ async def find_dangling_state(repository: SupabaseWorkOrderRepository) -> list[s
 
 
 async def reconcile_state(
-    repository: SupabaseWorkOrderRepository,
+    repository: RepositoryType,
     fix: bool = False
 ) -> dict[str, Any]:
     """Reconcile database state with filesystem.
@@ -113,7 +119,7 @@ async def reconcile_state(
     will clean up orphaned worktrees and mark dangling state as failed.
 
     Args:
-        repository: Supabase repository instance
+        repository: Repository instance
         fix: If True, cleanup orphans and update dangling state. If False, dry-run only.
 
     Returns:
@@ -142,12 +148,12 @@ async def reconcile_state(
         # Clean up orphaned worktrees
         worktree_base = Path(config.WORKTREE_BASE_DIR)
         base_dir_resolved = os.path.abspath(os.path.normpath(str(worktree_base)))
-        
+
         for orphan_path in orphans:
             try:
                 # Safety check: verify orphan_path is inside worktree base directory
                 orphan_path_resolved = os.path.abspath(os.path.normpath(orphan_path))
-                
+
                 # Verify path is within base directory and not the base directory itself
                 try:
                     common_path = os.path.commonpath([base_dir_resolved, orphan_path_resolved])
@@ -164,11 +170,11 @@ async def reconcile_state(
                     is_inside_base = False
                     is_not_base = True
                     is_not_root = True
-                
+
                 if is_inside_base and is_not_base and is_not_root:
-                shutil.rmtree(orphan_path)
-                actions.append(f"Deleted orphaned worktree: {orphan_path}")
-                logger.info("orphaned_worktree_deleted", path=orphan_path)
+                    shutil.rmtree(orphan_path)
+                    actions.append(f"Deleted orphaned worktree: {orphan_path}")
+                    logger.info("orphaned_worktree_deleted", path=orphan_path)
                 else:
                     # Safety check failed - do not delete
                     actions.append(f"Skipped deletion of {orphan_path} (safety check failed: outside worktree base or invalid path)")

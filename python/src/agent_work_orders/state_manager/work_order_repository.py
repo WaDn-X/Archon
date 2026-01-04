@@ -1,7 +1,7 @@
 """Work Order Repository
 
-In-memory storage for agent work orders (MVP).
-TODO Phase 2+: Migrate to Supabase persistence.
+In-memory storage for agent work orders.
+Supports memory or file-based persistence via repository factory.
 """
 
 import asyncio
@@ -17,7 +17,7 @@ class WorkOrderRepository:
     """In-memory repository for work order state
 
     Stores minimal state (5 fields) and metadata separately.
-    TODO Phase 2+: Replace with SupabaseWorkOrderRepository
+    Use FileStateRepository for persistence across restarts.
     """
 
     def __init__(self):

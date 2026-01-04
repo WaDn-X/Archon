@@ -2,6 +2,7 @@
 Client Manager Service
 
 Manages database and API client connections.
+PostgreSQL connection via Supabase client for backward compatibility.
 """
 
 import os
@@ -14,7 +15,11 @@ from ..config.logfire_config import search_logger
 
 def get_supabase_client() -> Client:
     """
-    Get a Supabase client instance.
+    Get a Supabase client instance for PostgreSQL access.
+
+    Note: Despite the name, this is used as a PostgreSQL client.
+    Vespa is the primary backend for vector operations.
+    PostgreSQL (via Supabase) is used for structured data.
 
     Returns:
         Supabase client instance
