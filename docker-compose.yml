@@ -1,11 +1,78 @@
 # Docker Compose profiles:
 # - Default (no profile): Starts archon-server, archon-mcp, and archon-frontend
 # - Agents are opt-in: archon-agents starts only with the "agents" profile
+# - Local Supabase: Use --profile local-supabase for self-hosted PostgreSQL + PostgREST
 # Usage:
-#   docker compose up                        # Starts server, mcp, frontend (agents disabled)
-#   docker compose --profile agents up -d    # Also starts archon-agents
+#   docker compose up                                    # Starts server, mcp, frontend (needs external Supabase)
+#   docker compose --profile local-supabase up -d        # Includes local PostgreSQL + PostgREST
+#   docker compose --profile local-supabase --profile agents up -d  # All services
 
 services:
+  # =============================================================================
+  # LOCAL SUPABASE SERVICES (opt-in via --profile local-supabase)
+  # =============================================================================
+
+  # PostgreSQL with pgvector extension
+  supabase-db:
+    profiles:
+      - local-supabase
+    image: pgvector/pgvector:pg16
+    container_name: supabase-db
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+      - ./migration/00-local-init.sql:/docker-entrypoint-initdb.d/00-local-init.sql:ro
+      - ./migration/complete_setup.sql:/docker-entrypoint-initdb.d/01-complete-setup.sql:ro
+      - ./migration/02-local-grants.sql:/docker-entrypoint-initdb.d/02-local-grants.sql:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgREST - REST API for PostgreSQL
+  supabase-rest:
+    profiles:
+      - local-supabase
+    image: postgrest/postgrest:v12.2.3
+    container_name: supabase-rest
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-token-with-at-least-32-characters}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    networks:
+      - app-network
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+
+  # API Gateway - Routes /rest/v1/* to PostgREST (required for supabase-py compatibility)
+  supabase-kong:
+    profiles:
+      - local-supabase
+    image: nginx:alpine
+    container_name: supabase-kong
+    ports:
+      - "${SUPABASE_API_PORT:-8000}:8000"
+    volumes:
+      - ./docker/nginx-supabase.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - app-network
+    depends_on:
+      - supabase-rest
+  # =============================================================================
+  # ARCHON SERVICES
+  # =============================================================================
+
   # Server Service (FastAPI + Socket.IO + Crawling)
   archon-server:
     build:
@@ -32,6 +99,10 @@ services:
       - ARCHON_HOST=${HOST:-localhost}
     networks:
       - app-network
+    depends_on:
+      supabase-kong:
+        condition: service_started
+        required: false  # Only when using --profile local-supabase
     volumes:
       # SECURITY: Docker socket mounting removed (CVE-2025-9074 - CVSS 9.3)
       # MCP status now monitored via HTTP health checks (secure, portable)
@@ -237,3 +308,7 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  supabase-db-data:
+    driver: local

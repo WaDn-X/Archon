@@ -141,6 +141,11 @@ def validate_supabase_url(url: str) -> bool:
         if hostname in local_hosts or hostname.endswith(".localhost"):
             return True
 
+        # Allow Docker container names (no dots = internal Docker network name)
+        # e.g., "supabase-kong", "postgres", "redis"
+        if "." not in hostname:
+            return True
+
         # Check if hostname is a private IP address
         try:
             ip = ipaddress.ip_address(hostname)
