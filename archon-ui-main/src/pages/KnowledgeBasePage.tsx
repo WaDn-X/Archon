@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, Suspense, lazy } from 'react';
 import { Search, Grid, Plus, Upload, Link as LinkIcon, Brain, Filter, BoxIcon, List, BookOpen, CheckSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card } from '../components/ui/Card';
@@ -14,11 +14,14 @@ import { knowledgeSocketIO } from '../services/socketIOService';
 import { CrawlingProgressCard } from '../components/knowledge-base/CrawlingProgressCard';
 import { CrawlProgressData, crawlProgressService } from '../services/crawlProgressService';
 import { WebSocketState } from '../services/socketIOService';
-import { KnowledgeTable } from '../components/knowledge-base/KnowledgeTable';
-import { KnowledgeItemCard } from '../components/knowledge-base/KnowledgeItemCard';
-import { GroupedKnowledgeItemCard } from '../components/knowledge-base/GroupedKnowledgeItemCard';
 import { KnowledgeGridSkeleton, KnowledgeTableSkeleton } from '../components/knowledge-base/KnowledgeItemSkeleton';
 import { GroupCreationModal } from '../components/knowledge-base/GroupCreationModal';
+import { SectionLoadingState } from '../components/ui/LoadingStates';
+
+// Lazy load heavy components
+const KnowledgeTable = lazy(() => import('../components/knowledge-base/KnowledgeTable'));
+const KnowledgeItemCard = lazy(() => import('../components/knowledge-base/KnowledgeItemCard'));
+const GroupedKnowledgeItemCard = lazy(() => import('../components/knowledge-base/GroupedKnowledgeItemCard'));
 
 const extractDomain = (url: string): string => {
   try {
@@ -291,6 +294,9 @@ export const KnowledgeBasePage = () => {
     itemVariants: headerItemVariants,
     titleVariants
   } = useStaggeredEntrance([1, 2], 0.15);
+
+  // Mobile responsiveness helpers
+  const isMobile = () => typeof window !== 'undefined' && window.innerWidth < 768;
 
   // Separate staggered entrance for the content that will reanimate on view changes
   const {
@@ -997,10 +1003,12 @@ export const KnowledgeBasePage = () => {
         {loading ? (
           viewMode === 'grid' ? <KnowledgeGridSkeleton /> : <KnowledgeTableSkeleton />
         ) : viewMode === 'table' ? (
-          <KnowledgeTable 
-            items={filteredItems} 
-            onDelete={handleDeleteItem} 
-          />
+          <Suspense fallback={<SectionLoadingState message="Loading table..." />}>
+            <KnowledgeTable
+              items={filteredItems}
+              onDelete={handleDeleteItem}
+            />
+          </Suspense>
         ) : (
           <>
             {/* Knowledge Items Grid/List with staggered animation that reanimates on view change */}
@@ -1044,27 +1052,31 @@ export const KnowledgeBasePage = () => {
                         {/* Manually grouped items */}
                         {groupedItems.map(groupedItem => (
                           <motion.div key={groupedItem.id} variants={contentItemVariants}>
-                            <GroupedKnowledgeItemCard 
-                              groupedItem={groupedItem} 
-                              onDelete={handleDeleteItem}
-                              onUpdate={loadKnowledgeItems}
-                              onRefresh={handleRefreshItem}
-                            />
+                            <Suspense fallback={<CardSkeleton />}>
+                              <GroupedKnowledgeItemCard
+                                groupedItem={groupedItem}
+                                onDelete={handleDeleteItem}
+                                onUpdate={loadKnowledgeItems}
+                                onRefresh={handleRefreshItem}
+                              />
+                            </Suspense>
                           </motion.div>
                         ))}
-                        
+
                         {/* Ungrouped items */}
                         {ungroupedItems.map((item, index) => (
                           <motion.div key={item.id} variants={contentItemVariants}>
-                            <KnowledgeItemCard 
-                              item={item} 
-                              onDelete={handleDeleteItem} 
-                              onUpdate={loadKnowledgeItems} 
-                              onRefresh={handleRefreshItem}
-                              isSelectionMode={isSelectionMode}
-                              isSelected={selectedItems.has(item.id)}
-                              onToggleSelection={(e) => toggleItemSelection(item.id, index, e)}
-                            />
+                            <Suspense fallback={<CardSkeleton />}>
+                              <KnowledgeItemCard
+                                item={item}
+                                onDelete={handleDeleteItem}
+                                onUpdate={loadKnowledgeItems}
+                                onRefresh={handleRefreshItem}
+                                isSelectionMode={isSelectionMode}
+                                isSelected={selectedItems.has(item.id)}
+                                onToggleSelection={(e) => toggleItemSelection(item.id, index, e)}
+                              />
+                            </Suspense>
                           </motion.div>
                         ))}
                         
@@ -1114,27 +1126,31 @@ export const KnowledgeBasePage = () => {
                     {/* Manually grouped items */}
                     {groupedItems.map(groupedItem => (
                       <motion.div key={groupedItem.id} variants={contentItemVariants}>
-                        <GroupedKnowledgeItemCard 
-                          groupedItem={groupedItem} 
-                          onDelete={handleDeleteItem}
-                          onUpdate={loadKnowledgeItems}
-                          onRefresh={handleRefreshItem}
-                        />
+                        <Suspense fallback={<CardSkeleton />}>
+                          <GroupedKnowledgeItemCard
+                            groupedItem={groupedItem}
+                            onDelete={handleDeleteItem}
+                            onUpdate={loadKnowledgeItems}
+                            onRefresh={handleRefreshItem}
+                          />
+                        </Suspense>
                       </motion.div>
                     ))}
-                    
+
                     {/* Ungrouped items */}
                     {ungroupedItems.map((item, index) => (
                       <motion.div key={item.id} variants={contentItemVariants}>
-                        <KnowledgeItemCard 
-                          item={item} 
-                          onDelete={handleDeleteItem} 
-                          onUpdate={loadKnowledgeItems} 
-                          onRefresh={handleRefreshItem}
-                          isSelectionMode={isSelectionMode}
-                          isSelected={selectedItems.has(item.id)}
-                          onToggleSelection={(e) => toggleItemSelection(item.id, index, e)}
-                        />
+                        <Suspense fallback={<CardSkeleton />}>
+                          <KnowledgeItemCard
+                            item={item}
+                            onDelete={handleDeleteItem}
+                            onUpdate={loadKnowledgeItems}
+                            onRefresh={handleRefreshItem}
+                            isSelectionMode={isSelectionMode}
+                            isSelected={selectedItems.has(item.id)}
+                            onToggleSelection={(e) => toggleItemSelection(item.id, index, e)}
+                          />
+                        </Suspense>
                       </motion.div>
                     ))}
                     

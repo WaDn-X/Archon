@@ -71,7 +71,12 @@ async def list_credentials(category: str | None = None):
         ]
     except Exception as e:
         logfire.error(f"Error listing credentials | category={category} | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/credentials/categories/{category}")
@@ -90,7 +95,12 @@ async def get_credentials_by_category(category: str):
         logfire.error(
             f"Error getting credentials by category | category={category} | error={str(e)}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/credentials")
@@ -120,11 +130,21 @@ async def create_credential(request: CredentialRequest):
             }
         else:
             logfire.error(f"Failed to save credential | key={request.key}")
-            raise HTTPException(status_code=500, detail={"error": "Failed to save credential"})
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": "Failed to save credential"},
+            status_code=500
+        )
 
     except Exception as e:
         logfire.error(f"Error creating credential | key={request.key} | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 # Define optional settings with their default values
@@ -158,7 +178,12 @@ async def get_credential(key: str, decrypt: bool = True):
                 }
 
             logfire.warning(f"Credential not found | key={key}")
-            raise HTTPException(status_code=404, detail={"error": f"Credential {key} not found"})
+            return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message={"error": f"Credential {key} not found"},
+            status_code=404
+        )
 
         logfire.info(f"Credential retrieved successfully | key={key}")
 
@@ -178,7 +203,12 @@ async def get_credential(key: str, decrypt: bool = True):
         raise
     except Exception as e:
         logfire.error(f"Error getting credential | key={key} | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.put("/credentials/{key}")
@@ -234,11 +264,21 @@ async def update_credential(key: str, request: dict[str, Any]):
             return {"success": True, "message": f"Credential {key} updated successfully"}
         else:
             logfire.error(f"Failed to update credential | key={key}")
-            raise HTTPException(status_code=500, detail={"error": "Failed to update credential"})
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": "Failed to update credential"},
+            status_code=500
+        )
 
     except Exception as e:
         logfire.error(f"Error updating credential | key={key} | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.delete("/credentials/{key}")
@@ -254,11 +294,21 @@ async def delete_credential(key: str):
             return {"success": True, "message": f"Credential {key} deleted successfully"}
         else:
             logfire.error(f"Failed to delete credential | key={key}")
-            raise HTTPException(status_code=500, detail={"error": "Failed to delete credential"})
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": "Failed to delete credential"},
+            status_code=500
+        )
 
     except Exception as e:
         logfire.error(f"Error deleting credential | key={key} | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/credentials/initialize")
@@ -273,7 +323,12 @@ async def initialize_credentials_endpoint():
         return {"success": True, "message": "Credentials reloaded from database"}
     except Exception as e:
         logfire.error(f"Error reloading credentials | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/database/metrics")
@@ -329,7 +384,12 @@ async def database_metrics():
 
     except Exception as e:
         logfire.error(f"Error getting database metrics | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/settings/health")

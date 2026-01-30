@@ -1,34 +1,38 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { KnowledgeBasePage } from './pages/KnowledgeBasePage';
-import { SettingsPage } from './pages/SettingsPage';
-import { MCPPage } from './pages/MCPPage';
-import { OnboardingPage } from './pages/OnboardingPage';
-import { MainLayout } from './components/layouts/MainLayout';
 import { EnhancedThemeProvider } from './contexts/EnhancedThemeContext';
 import { I18nProvider } from './contexts/I18nContext';
 import { ToastProvider } from './contexts/ToastContext';
-import { SettingsProvider, useSettings } from './contexts/SettingsContext';
-import { ProjectPage } from './pages/ProjectPage';
-import { DisconnectScreenOverlay } from './components/DisconnectScreenOverlay';
+import { SettingsProvider } from './contexts/SettingsContext';
 import { ErrorBoundaryWithBugReport } from './components/bug-report/ErrorBoundaryWithBugReport';
-import { serverHealthService } from './services/serverHealthService';
+import { PageLoadingState } from './components/ui/LoadingStates';
+
+// Lazy load heavy components for better performance
+const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const MCPPage = lazy(() => import('./pages/MCPPage'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const MainLayout = lazy(() => import('./components/layouts/MainLayout'));
+const ProjectPage = lazy(() => import('./pages/ProjectPage'));
+const DisconnectScreenOverlay = lazy(() => import('./components/DisconnectScreenOverlay'));
 
 const AppRoutes = () => {
   const { projectsEnabled } = useSettings();
-  
+
   return (
-    <Routes>
-      <Route path="/" element={<KnowledgeBasePage />} />
-      <Route path="/onboarding" element={<OnboardingPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
-      <Route path="/mcp" element={<MCPPage />} />
-      {projectsEnabled ? (
-        <Route path="/projects" element={<ProjectPage />} />
-      ) : (
-        <Route path="/projects" element={<Navigate to="/" replace />} />
-      )}
-    </Routes>
+    <Suspense fallback={<PageLoadingState message="Loading page..." />}>
+      <Routes>
+        <Route path="/" element={<KnowledgeBasePage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/mcp" element={<MCPPage />} />
+        {projectsEnabled ? (
+          <Route path="/projects" element={<ProjectPage />} />
+        ) : (
+          <Route path="/projects" element={<Navigate to="/" replace />} />
+        )}
+      </Routes>
+    </Suspense>
   );
 };
 
@@ -74,7 +78,7 @@ const AppContent = () => {
   };
 
   return (
-    <>
+    <Suspense fallback={<PageLoadingState message="Loading application..." />}>
       <Router>
         <ErrorBoundaryWithBugReport>
           <MainLayout>
@@ -86,7 +90,7 @@ const AppContent = () => {
         isActive={disconnectScreenActive && disconnectScreenSettings.enabled}
         onDismiss={handleDismissDisconnectScreen}
       />
-    </>
+    </Suspense>
   );
 };
 

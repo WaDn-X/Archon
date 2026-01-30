@@ -17,13 +17,14 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from jose import JWTError
 
-from ..services.auth_service import auth_service
+from ..services.auth_service import auth_service, User
 from ..services.error_service import error_service
 
 
 class AuthMiddleware:
-    """Authentication middleware for request processing."""
+    """Enhanced authentication middleware for request processing."""
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -36,8 +37,12 @@ class AuthMiddleware:
         if request.url.path in public_paths:
             return await call_next(request)
 
-        # Try to authenticate user
-        user = auth_service.get_current_user(request)
+        # Try to authenticate user with enhanced methods
+        user = await self._authenticate_user(request)
+
+        # Check for token refresh if authentication failed
+        if not user:
+            user = await self._try_token_refresh(request)
 
         # Add user info to request state for use in handlers
         request.state.user = user
@@ -52,6 +57,77 @@ class AuthMiddleware:
         response = await call_next(request)
 
         return response
+
+    async def _authenticate_user(self, request: Request) -> Optional[User]:
+        """Enhanced user authentication with multiple methods."""
+        # Try Bearer token first
+        authorization = request.headers.get("authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.split(" ")[1]
+
+            # Basic token validation
+            if not token or len(token) < 10:
+                self.logger.warning("Invalid Bearer token format received")
+                return None
+
+            try:
+                token_data = auth_service.verify_token(token)
+                if token_data:
+                    return User(
+                        user_id=token_data.user_id,
+                        role=token_data.role
+                    )
+            except JWTError as e:
+                self.logger.warning(f"JWT verification failed: {e}")
+                return None
+            except Exception as e:
+                self.logger.error(f"Unexpected error during token verification: {e}")
+                return None
+
+        # Try API key
+        api_key = request.headers.get("x-api-key") or request.query_params.get("api_key")
+        if api_key:
+            user = await auth_service.authenticate_api_key(api_key)
+            if user:
+                return user
+
+        # Try session cookie
+        session_token = request.cookies.get("session_token")
+        if session_token:
+            token_data = auth_service.verify_token(session_token)
+            if token_data:
+                return User(
+                    user_id=token_data.user_id,
+                    role=token_data.role
+                )
+
+        return None
+
+    async def _try_token_refresh(self, request: Request) -> Optional[User]:
+        """Attempt to refresh access token using refresh token."""
+        # Check for refresh token in cookies or headers
+        refresh_token = (
+            request.cookies.get("refresh_token") or
+            request.headers.get("x-refresh-token")
+        )
+
+        if refresh_token:
+            try:
+                # Try to get new access token
+                new_access_token = auth_service.refresh_access_token(refresh_token)
+                if new_access_token:
+                    # Verify the new token and return user
+                    token_data = auth_service.verify_token(new_access_token)
+                    if token_data:
+                        self.logger.info(f"Token refreshed for user: {token_data.user_id}")
+                        return User(
+                            user_id=token_data.user_id,
+                            role=token_data.role
+                        )
+            except Exception as e:
+                self.logger.warning(f"Token refresh failed: {e}")
+
+        return None
 
 
 class RateLimitMiddleware:

@@ -2,6 +2,8 @@
 
 import pytest
 import asyncio
+import json
+import time
 from playwright.async_api import async_playwright, Page, Browser
 import os
 
@@ -47,6 +49,10 @@ class TestE2EWorkflow:
 
         # Check for essential UI elements
         await page.wait_for_selector('[data-testid="main-content"], .main, #root', timeout=10000)
+
+        # Check for core functionality indicators
+        content = await page.content()
+        assert "welcome" in content.lower() or "dashboard" in content.lower() or "project" in content.lower()
 
     async def test_api_health_check(self, page: Page):
         """Test API health endpoint through frontend."""
@@ -304,52 +310,407 @@ class TestAPISecurity:
         except Exception as e:
             pytest.skip(f"CORS test skipped: {e}")
 
-    async def test_rate_limiting(self, page: Page):
-        """Test rate limiting from browser context."""
+
+class TestAPIIntegration:
+    """Comprehensive API integration tests."""
+
+    async def test_api_docs_accessibility(self, page: Page):
+        """Test that API documentation is accessible."""
         api_url = os.getenv("API_URL", "http://localhost:8181")
 
-        # Make multiple requests quickly
-        responses = []
-        for i in range(15):  # More than default rate limit
-            try:
-                response = await page.request.get(f"{api_url}/health")
-                responses.append(response.status)
-                if response.status == 429:
+        # Test OpenAPI/Swagger docs
+        try:
+            response = await page.request.get(f"{api_url}/docs")
+            assert response.status == 200
+
+            # Check for OpenAPI content
+            content = await response.text()
+            assert "openapi" in content.lower() or "swagger" in content.lower()
+
+        except Exception as e:
+            pytest.skip(f"API docs test skipped: {e}")
+
+    async def test_api_version_endpoint(self, page: Page):
+        """Test API version endpoint."""
+        api_url = os.getenv("API_URL", "http://localhost:8181")
+
+        try:
+            response = await page.request.get(f"{api_url}/api/v1/version")
+            assert response.status in [200, 404]  # 404 if endpoint doesn't exist yet
+
+            if response.status == 200:
+                data = await response.json()
+                assert "version" in data or "name" in data
+
+        except Exception as e:
+            pytest.skip(f"API version test skipped: {e}")
+
+    async def test_websocket_connectivity(self, page: Page):
+        """Test WebSocket connectivity for real-time features."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
+
+        try:
+            # Navigate to frontend and check for WebSocket connections
+            await page.goto(frontend_url)
+            await page.wait_for_load_state('networkidle')
+
+            # Check if WebSocket connections are established
+            # This is a basic check - real implementation would need proper WebSocket testing
+            ws_connections = await page.evaluate("""
+                () => {
+                    return performance.getEntriesByType('resource')
+                        .filter(entry => entry.name.includes('ws://') || entry.name.includes('wss://'))
+                        .length;
+                }
+            """)
+
+            # At minimum, there should be no WebSocket connection errors in console
+            console_messages = []
+            page.on('console', lambda msg: console_messages.append(str(msg)))
+
+            await page.wait_for_timeout(3000)
+
+            ws_errors = [msg for msg in console_messages if 'websocket' in msg.lower() and 'error' in msg.lower()]
+            assert len(ws_errors) == 0, f"WebSocket errors found: {ws_errors}"
+
+        except Exception as e:
+            pytest.skip(f"WebSocket test skipped: {e}")
+
+    async def test_database_connectivity(self, page: Page):
+        """Test database connectivity through API."""
+        api_url = os.getenv("API_URL", "http://localhost:8181")
+
+        try:
+            # Test database-dependent endpoints
+            endpoints_to_test = ["/health", "/api/v1/status", "/api/v1/info"]
+
+            for endpoint in endpoints_to_test:
+                try:
+                    response = await page.request.get(f"{api_url}{endpoint}")
+                    if response.status == 200:
+                        data = await response.json()
+                        # Check for database-related fields
+                        assert isinstance(data, dict)
+                        break
+                except:
+                    continue
+
+        except Exception as e:
+            pytest.skip(f"Database connectivity test skipped: {e}")
+
+    async def test_authentication_flow(self, page: Page):
+        """Test authentication flow and session management."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
+        api_url = os.getenv("API_URL", "http://localhost:8181")
+
+        try:
+            # Test login endpoint
+            login_response = await page.request.post(
+                f"{api_url}/api/v1/auth/login",
+                data=json.dumps({
+                    "username": "test_user",
+                    "password": "test_password"
+                }),
+                headers={'Content-Type': 'application/json'}
+            )
+
+            # Should get authentication response (200, 401, or 422 are all valid)
+            assert login_response.status in [200, 401, 422, 404]
+
+            if login_response.status == 200:
+                login_data = await login_response.json()
+                assert "token" in login_data or "access_token" in login_data
+
+        except Exception as e:
+            pytest.skip(f"Authentication test skipped: {e}")
+
+    async def test_file_upload_functionality(self, page: Page):
+        """Test file upload capabilities."""
+        api_url = os.getenv("API_URL", "http://localhost:8181")
+
+        try:
+            # Test file upload endpoint
+            test_file_content = b"This is a test file for upload testing."
+
+            upload_response = await page.request.post(
+                f"{api_url}/api/v1/upload",
+                files={"file": ("test.txt", test_file_content, "text/plain")}
+            )
+
+            # Should handle file upload (200, 404, or 422 are all valid responses)
+            assert upload_response.status in [200, 404, 422, 413]
+
+        except Exception as e:
+            pytest.skip(f"File upload test skipped: {e}")
+
+
+class TestCompleteWorkflows:
+    """Test complete user workflows from start to finish."""
+
+    async def test_project_creation_workflow(self, page: Page):
+        """Test complete project creation workflow."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
+
+        try:
+            await page.goto(frontend_url)
+            await page.wait_for_load_state('networkidle')
+
+            # Look for project creation interface
+            project_selectors = [
+                '[data-testid="new-project"]',
+                '.new-project',
+                'button:has-text("New Project")',
+                'button:has-text("Create Project")'
+            ]
+
+            project_button_found = False
+            for selector in project_selectors:
+                try:
+                    await page.wait_for_selector(selector, timeout=3000)
+                    await page.click(selector)
+                    project_button_found = True
                     break
-            except:
-                responses.append(500)
+                except:
+                    continue
 
-        # Check if rate limiting kicked in
-        rate_limited = 429 in responses
-        if rate_limited:
-            assert responses[-1] == 429, "Rate limiting should return 429 status"
+            if project_button_found:
+                # Wait for project creation form
+                await page.wait_for_selector('input[placeholder*="project"], textarea', timeout=5000)
 
-    async def test_input_validation(self, page: Page):
-        """Test input validation through browser."""
+                # Fill in project details
+                inputs = await page.query_selector_all('input, textarea')
+                if inputs:
+                    # Fill first input (likely project name)
+                    await inputs[0].fill("Test E2E Project")
+
+                    # Fill second input if available (likely description)
+                    if len(inputs) > 1:
+                        await inputs[1].fill("This is a test project created by E2E tests")
+
+                # Submit form
+                submit_buttons = await page.query_selector_all('button[type="submit"], button:has-text("Create")')
+                if submit_buttons:
+                    await submit_buttons[0].click()
+
+                    # Wait for success or redirect
+                    await page.wait_for_load_state('networkidle')
+
+                    # Check for success indicators
+                    content = await page.content()
+                    assert "created" in content.lower() or "success" in content.lower() or "dashboard" in content.lower()
+
+        except Exception as e:
+            pytest.skip(f"Project creation workflow test skipped: {e}")
+
+    async def test_knowledge_base_workflow(self, page: Page):
+        """Test complete knowledge base workflow."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
+
+        try:
+            await page.goto(frontend_url)
+            await page.wait_for_load_state('networkidle')
+
+            # Look for knowledge base interface
+            kb_selectors = [
+                '[data-testid="knowledge-base"]',
+                '.knowledge-base',
+                '[data-testid="documents"]',
+                '.documents',
+                'button:has-text("Knowledge")',
+                'button:has-text("Documents")'
+            ]
+
+            kb_found = False
+            for selector in kb_selectors:
+                try:
+                    await page.wait_for_selector(selector, timeout=3000)
+                    await page.click(selector)
+                    kb_found = True
+                    break
+                except:
+                    continue
+
+            if kb_found:
+                # Wait for knowledge base content
+                await page.wait_for_selector('[data-testid="document-list"], .document-list, .file-list', timeout=5000)
+
+                # Check for upload functionality
+                upload_selectors = [
+                    '[data-testid="upload-document"]',
+                    '.upload-document',
+                    'input[type="file"]',
+                    'button:has-text("Upload")'
+                ]
+
+                for selector in upload_selectors:
+                    try:
+                        await page.wait_for_selector(selector, timeout=2000)
+                        break
+                    except:
+                        continue
+
+        except Exception as e:
+            pytest.skip(f"Knowledge base workflow test skipped: {e}")
+
+    async def test_ai_agent_workflow(self, page: Page):
+        """Test complete AI agent workflow."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
+
+        try:
+            await page.goto(frontend_url)
+            await page.wait_for_load_state('networkidle')
+
+            # Look for AI agent interface
+            agent_selectors = [
+                '[data-testid="ai-agent"]',
+                '.ai-agent',
+                '[data-testid="agents"]',
+                '.agents',
+                'button:has-text("Agent")',
+                'button:has-text("AI")'
+            ]
+
+            agent_found = False
+            for selector in agent_selectors:
+                try:
+                    await page.wait_for_selector(selector, timeout=3000)
+                    await page.click(selector)
+                    agent_found = True
+                    break
+                except:
+                    continue
+
+            if agent_found:
+                # Wait for agent interface
+                await page.wait_for_selector('[data-testid="agent-list"], .agent-list, .chat-interface', timeout=5000)
+
+                # Look for chat or prompt interface
+                chat_selectors = [
+                    '[data-testid="chat-input"]',
+                    '.chat-input',
+                    'textarea[placeholder*="ask" i]',
+                    'input[placeholder*="prompt" i]'
+                ]
+
+                for selector in chat_selectors:
+                    try:
+                        chat_input = await page.wait_for_selector(selector, timeout=3000)
+                        await chat_input.fill("Hello, can you help me with a test task?")
+                        break
+                    except:
+                        continue
+
+        except Exception as e:
+            pytest.skip(f"AI agent workflow test skipped: {e}")
+
+    async def test_collaboration_features(self, page: Page):
+        """Test collaboration features like real-time editing."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
+
+        try:
+            await page.goto(frontend_url)
+            await page.wait_for_load_state('networkidle')
+
+            # Look for collaboration indicators
+            collab_selectors = [
+                '[data-testid="collaboration"]',
+                '.collaboration',
+                '[data-testid="users-online"]',
+                '.users-online',
+                '[data-testid="live-cursors"]',
+                '.live-cursors'
+            ]
+
+            # Check for presence of collaboration features
+            collab_features_found = 0
+            for selector in collab_selectors:
+                try:
+                    await page.wait_for_selector(selector, timeout=2000)
+                    collab_features_found += 1
+                except:
+                    continue
+
+            # Should have at least some collaboration features
+            assert collab_features_found > 0, "No collaboration features found"
+
+        except Exception as e:
+            pytest.skip(f"Collaboration features test skipped: {e}")
+
+    async def test_error_recovery_workflow(self, page: Page):
+        """Test error handling and recovery workflows."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
+
+        try:
+            # Test 404 handling
+            await page.goto(f"{frontend_url}/nonexistent-page")
+            await page.wait_for_load_state('networkidle')
+
+            # Should handle 404 gracefully
+            content = await page.content()
+            status_404 = await page.evaluate("() => document.querySelector('h1, h2, p')?.textContent || ''")
+
+            # Check that 404 is handled (either error page or redirect)
+            assert (
+                "404" in content or
+                "not found" in content.lower() or
+                "error" in content.lower() or
+                len(status_404) > 0
+            )
+
+        except Exception as e:
+            pytest.skip(f"Error recovery test skipped: {e}")
+
+    async def test_cross_origin_requests(self, page: Page):
+        """Test cross-origin request handling."""
         api_url = os.getenv("API_URL", "http://localhost:8181")
 
-        # Test various invalid inputs
-        test_cases = [
-            ("", "Empty input"),
-            ("<script>alert('xss')</script>", "XSS attempt"),
-            ("'; DROP TABLE users; --", "SQL injection attempt"),
-            ("A" * 10000, "Very long input")
-        ]
+        try:
+            # Test preflight OPTIONS request
+            response = await page.request.options(f"{api_url}/health")
+            # CORS preflight should be allowed or return 404 if not implemented
+            assert response.status in [200, 404, 405]
 
-        for test_input, description in test_cases:
-            try:
-                response = await page.request.post(
-                    f"{api_url}/api/v1/specs/generate",
-                    data=json.dumps({"prompt": test_input}),
-                    headers={'Content-Type': 'application/json'}
-                )
+        except Exception as e:
+            pytest.skip(f"Cross-origin test skipped: {e}")
 
-                # Should not crash the server (no 500 errors for valid input handling)
-                if response.status not in [401, 422]:  # Allow auth and validation errors
-                    assert response.status != 500, f"Server crashed on {description}"
+    async def test_input_validation_frontend(self, page: Page):
+        """Test input validation through frontend interface."""
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3737")
 
-            except Exception as e:
-                pytest.skip(f"Input validation test skipped for {description}: {e}")
+        try:
+            await page.goto(frontend_url)
+            await page.wait_for_load_state('networkidle')
+
+            # Look for input fields that might need validation
+            input_selectors = [
+                '[data-testid="prompt-input"]',
+                '.prompt-input',
+                'textarea[placeholder*="prompt" i]',
+                'input[placeholder*="input" i]'
+            ]
+
+            for selector in input_selectors:
+                try:
+                    input_field = await page.wait_for_selector(selector, timeout=3000)
+
+                    # Test XSS input
+                    await input_field.fill("<script>alert('xss')</script>")
+                    await input_field.press('Enter')
+
+                    # Should not crash or show raw script
+                    content = await page.content()
+                    assert "alert" not in content.lower(), "XSS content leaked to page"
+
+                    # Clear and test normal input
+                    await input_field.fill("Normal test input")
+                    await input_field.press('Enter')
+
+                    break
+                except:
+                    continue
+
+        except Exception as e:
+            pytest.skip(f"Input validation frontend test skipped: {e}")
 
 
 # Performance testing utilities

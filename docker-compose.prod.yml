@@ -1,111 +1,38 @@
 # Production Docker Compose Configuration for Zippy-Archon
 # This configuration is optimized for production deployment with:
 # - Security hardening
+# - Monitoring and logging
+# - High availability
 # - Resource limits
 # - Health checks
-# - Logging configuration
-# - Environment-specific settings
+# - Rolling updates
 
 version: '3.8'
 
 services:
-  # Reverse Proxy (Nginx)
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: zippy-archon-nginx
+  # PostgreSQL Database (Production)
+  postgres:
+    image: postgres:15-alpine
+    container_name: zippy-archon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zippy_archon
+      POSTGRES_USER: zippy_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migration:/docker-entrypoint-initdb.d
     ports:
-      - "${NGINX_PORT:-80}:80"
-      - "${NGINX_SSL_PORT:-443}:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - nginx_logs:/var/log/nginx
-    depends_on:
-      - archon-server
-      - archon-frontend
+      - "5432:5432"
     networks:
       - app-network
-      - traefik-network
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    environment:
-      - NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx
-      - NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx
-
-  # Server Service (FastAPI + Socket.IO)
-  archon-server:
-    build:
-      context: ./python
-      dockerfile: Dockerfile.server
-      args:
-        BUILDKIT_INLINE_CACHE: 1
-        ARCHON_SERVER_PORT: ${ARCHON_SERVER_PORT:-8181}
-    container_name: zippy-archon-server
-    expose:
-      - "${ARCHON_SERVER_PORT:-8181}"
-    environment:
-      # Database
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - SUPABASE_SCHEMA=public
-
-      # AI Providers
-      - XAI_API_KEY=${XAI_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ZIPPY_API_KEY=${ZIPPY_API_KEY:-}
-
-      # Security
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - ENVIRONMENT=production
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://yourdomain.com}
-
-      # Rate Limiting
-      - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
-      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
-
-      # Monitoring
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - RELEASE_VERSION=${RELEASE_VERSION:-1.0.0}
-
-      # Service Configuration
-      - ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8181}
-      - LOG_LEVEL=INFO
-      - SERVICE_DISCOVERY_MODE=docker_compose
-
-      # Performance
-      - MAX_WORKERS=${MAX_WORKERS:-4}
-      - WORKER_TIMEOUT=${WORKER_TIMEOUT:-300}
-
-    networks:
-      - app-network
-    volumes:
-      - ./python/src:/app/src:ro
-      - ./python/tests:/app/tests:ro
-      - server_logs:/app/logs
-      - ./agentic-workflow/data:/app/data
-      - ./agentic-workflow/uploads:/app/uploads
-    restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:${ARCHON_SERVER_PORT:-8181}/health').read()"
-        ]
+      test: ["CMD-SHELL", "pg_isready -U zippy_user -d zippy_archon"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    depends_on:
-      - redis
-      - postgres
     deploy:
       resources:
         limits:
@@ -115,49 +42,152 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # MCP Server Service
+  # Redis Cache (Production)
+  redis:
+    image: redis:7-alpine
+    container_name: zippy-archon-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Main Application Server (FastAPI)
+  archon-server:
+    build:
+      context: ./python
+      dockerfile: Dockerfile.server
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        ENVIRONMENT: production
+        ARCHON_SERVER_PORT: ${ARCHON_SERVER_PORT:-8181}
+    container_name: zippy-archon-server
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: production
+      RELEASE_VERSION: ${RELEASE_VERSION:-1.0.0}
+      LOG_LEVEL: INFO
+      # Database
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DATABASE_URL: postgresql://zippy_user:${POSTGRES_PASSWORD}@postgres:5432/zippy_archon
+      # AI Providers
+      XAI_API_KEY: ${XAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ZIPPY_API_KEY: ${ZIPPY_API_KEY}
+      # Security
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      RATE_LIMIT_REQUESTS: 1000
+      RATE_LIMIT_WINDOW: 60
+      # Caching
+      REDIS_URL: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      # Monitoring
+      SENTRY_DSN: ${SENTRY_DSN}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
+      # Services
+      ARCHON_SERVER_PORT: 8181
+      ARCHON_MCP_PORT: 8051
+      ARCHON_AGENTS_PORT: 8052
+      # Reverse Proxy
+      BEHIND_PROXY: true
+    ports:
+      - "8181:8181"
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8181/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        monitor: 30s
+        max_failure_ratio: 0.3
+
+  # MCP Server (Model Context Protocol)
   archon-mcp:
     build:
       context: ./python
       dockerfile: Dockerfile.mcp
       args:
         BUILDKIT_INLINE_CACHE: 1
-        ARCHON_MCP_PORT: ${ARCHON_MCP_PORT:-8051}
+        ENVIRONMENT: production
     container_name: zippy-archon-mcp
-    expose:
-      - "${ARCHON_MCP_PORT:-8051}"
+    restart: unless-stopped
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - RELEASE_VERSION=${RELEASE_VERSION:-1.0.0}
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
-      - SERVICE_DISCOVERY_MODE=docker_compose
-      - API_SERVICE_URL=http://archon-server:${ARCHON_SERVER_PORT:-8181}
-      - AGENTS_SERVICE_URL=http://archon-agents:${ARCHON_AGENTS_PORT:-8052}
-      - ARCHON_MCP_PORT=${ARCHON_MCP_PORT:-8051}
+      ENVIRONMENT: production
+      RELEASE_VERSION: ${RELEASE_VERSION:-1.0.0}
+      LOG_LEVEL: INFO
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DATABASE_URL: postgresql://zippy_user:${POSTGRES_PASSWORD}@postgres:5432/zippy_archon
+      XAI_API_KEY: ${XAI_API_KEY}
+      REDIS_URL: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SENTRY_DSN: ${SENTRY_DSN}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
+      API_SERVICE_URL: http://archon-server:8181
+      AGENTS_SERVICE_URL: http://archon-agents:8052
+      ARCHON_MCP_PORT: 8051
+      ARCHON_SERVER_PORT: 8181
+      ARCHON_AGENTS_PORT: 8052
+      BEHIND_PROXY: true
+    ports:
+      - "8051:8051"
     networks:
       - app-network
-    volumes:
-      - ./python/src:/app/src:ro
-      - mcp_logs:/app/logs
-    restart: unless-stopped
+    depends_on:
+      archon-server:
+        condition: service_healthy
+      archon-agents:
+        condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "sh",
-          "-c",
-          "timeout 10 bash -c 'cat < /dev/null > /dev/tcp/localhost/${ARCHON_MCP_PORT:-8051}'"
-        ]
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 8051)); s.close()"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    depends_on:
-      - archon-server
-      - archon-agents
     deploy:
       resources:
         limits:
@@ -174,37 +204,32 @@ services:
       dockerfile: Dockerfile.agents
       args:
         BUILDKIT_INLINE_CACHE: 1
-        ARCHON_AGENTS_PORT: ${ARCHON_AGENTS_PORT:-8052}
+        ENVIRONMENT: production
     container_name: zippy-archon-agents
-    expose:
-      - "${ARCHON_AGENTS_PORT:-8052}"
+    restart: unless-stopped
     environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
-      - XAI_API_KEY=${XAI_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ZIPPY_API_KEY=${ZIPPY_API_KEY:-}
-      - SENTRY_DSN=${SENTRY_DSN:-}
-      - RELEASE_VERSION=${RELEASE_VERSION:-1.0.0}
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
-      - SERVICE_DISCOVERY_MODE=docker_compose
-      - ARCHON_AGENTS_PORT=${ARCHON_AGENTS_PORT:-8052}
+      ENVIRONMENT: production
+      RELEASE_VERSION: ${RELEASE_VERSION:-1.0.0}
+      LOG_LEVEL: INFO
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DATABASE_URL: postgresql://zippy_user:${POSTGRES_PASSWORD}@postgres:5432/zippy_archon
+      XAI_API_KEY: ${XAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ZIPPY_API_KEY: ${ZIPPY_API_KEY}
+      REDIS_URL: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SENTRY_DSN: ${SENTRY_DSN}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
+      ARCHON_AGENTS_PORT: 8052
+      BEHIND_PROXY: true
+    ports:
+      - "8052:8052"
     networks:
       - app-network
-    volumes:
-      - ./python/src:/app/src:ro
-      - agents_logs:/app/logs
-    restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:${ARCHON_AGENTS_PORT:-8052}/health').read()"
-        ]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8052/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -218,7 +243,7 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # Frontend Service
+  # Frontend Application
   archon-frontend:
     build:
       context: ./archon-ui-main
@@ -226,28 +251,24 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: 1
     container_name: zippy-archon-frontend
-    expose:
-      - "3737"
+    restart: unless-stopped
     environment:
-      - VITE_API_URL=http://archon-server:${ARCHON_SERVER_PORT:-8181}
-      - VITE_ARCHON_SERVER_PORT=${ARCHON_SERVER_PORT:-8181}
-      - NODE_ENV=production
-      - VITE_SENTRY_DSN=${VITE_SENTRY_DSN:-}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8181}
+      VITE_ARCHON_SERVER_PORT: 8181
+      NODE_ENV: production
+    ports:
+      - "${ARCHON_UI_PORT:-3737}:3737"
     networks:
       - app-network
-    volumes:
-      - ./archon-ui-main/src:/app/src:ro
-      - ./archon-ui-main/public:/app/public:ro
-      - frontend_logs:/app/logs
-    restart: unless-stopped
+    depends_on:
+      archon-server:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3737"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
-    depends_on:
-      - archon-server
+      start_period: 60s
     deploy:
       resources:
         limits:
@@ -257,22 +278,30 @@ services:
           cpus: '0.25'
           memory: 256M
 
-  # Redis Cache (for rate limiting and caching)
-  redis:
-    image: redis:7.2-alpine
-    container_name: zippy-archon-redis
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: zippy-archon-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-8280}:${NGINX_PORT:-8280}"
+      - "${NGINX_SSL_PORT:-8443}:${NGINX_SSL_PORT:-8443}"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
     networks:
       - app-network
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
+    depends_on:
+      - archon-server
+      - archon-frontend
+      - archon-mcp
+      - archon-agents
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
+      test: ["CMD", "nginx", "-t"]
+      interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 30s
     deploy:
       resources:
         limits:
@@ -282,57 +311,13 @@ services:
           cpus: '0.1'
           memory: 128M
 
-  # PostgreSQL (recommended for production - optional)
-  postgres:
-    image: postgres:15-alpine
-    container_name: zippy-archon-postgres
-    environment:
-      - POSTGRES_DB=${DATABASE_NAME:-zippy_archon}
-      - POSTGRES_USER=${DATABASE_USER:-zippy}
-      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
-    networks:
-      - app-network
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./migration:/docker-entrypoint-initdb.d
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER:-zippy}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-
-  # Adminer (Database management UI - optional)
-  adminer:
-    image: adminer:latest
-    container_name: zippy-archon-adminer
-    ports:
-      - "8080:8080"
-    environment:
-      - ADMINER_DEFAULT_SERVER=postgres
-    networks:
-      - app-network
-    depends_on:
-      - postgres
-    profiles:
-      - tools
-
-  # Monitoring Stack (Optional - comment out if not needed)
+  # Monitoring Stack (Optional)
   prometheus:
     image: prom/prometheus:latest
     container_name: zippy-archon-prometheus
+    restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:${PROMETHEUS_PORT:-9090}"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -345,7 +330,6 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
-    restart: unless-stopped
     deploy:
       resources:
         limits:
@@ -358,42 +342,29 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: zippy-archon-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
       - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - app-network
-    restart: unless-stopped
     depends_on:
       - prometheus
     deploy:
       resources:
         limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
           cpus: '0.25'
           memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
 
-# Networks
-networks:
-  app-network:
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.name: zippy-archon-bridge
-  traefik-network:
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.name: zippy-traefik-bridge
-
-# Volumes
 volumes:
   postgres_data:
     driver: local
@@ -403,22 +374,20 @@ volumes:
     driver: local
   grafana_data:
     driver: local
-  server_logs:
-    driver: local
-  mcp_logs:
-    driver: local
-  agents_logs:
-    driver: local
-  frontend_logs:
-    driver: local
   nginx_logs:
     driver: local
 
-# Health checks and dependencies
-x-healthcheck: &healthcheck
-  healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost"]
-    interval: 30s
-    timeout: 10s
-    retries: 3
-    start_period: 40s
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Production deployment profiles
+# Use: docker-compose -f docker-compose.prod.yml --profile monitoring up -d
+profiles:
+  - monitoring:
+      services:
+        - prometheus
+        - grafana

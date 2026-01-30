@@ -17,7 +17,9 @@ from supabase import Client
 
 from ...config.logfire_config import get_logger, safe_span
 from ..embeddings.embedding_service import create_embedding
+from ..embeddings.multi_dimensional_service import multi_dimensional_service
 from .keyword_extractor import build_search_terms, extract_keywords
+from .advanced_reranking_service import advanced_reranking_service
 
 logger = get_logger(__name__)
 
@@ -359,3 +361,189 @@ class HybridSearchStrategy:
         )
 
         return final_results
+
+    async def multi_dimensional_search(
+        self,
+        query: str,
+        match_count: int,
+        table_name: str = "documents",
+        filter_metadata: dict | None = None,
+        select_fields: str | None = None,
+        use_multi_vector: bool = True,
+        similarity_threshold: float = 0.7,
+    ) -> list[dict[str, Any]]:
+        """
+        Perform multi-dimensional search using advanced embedding strategies.
+
+        Args:
+            query: The search query text
+            match_count: Number of results to return
+            table_name: The table to search
+            filter_metadata: Optional metadata filters
+            select_fields: Fields to select from results
+            use_multi_vector: Whether to use multi-vector embeddings
+            similarity_threshold: Minimum similarity score for results
+
+        Returns:
+            List of search results with enhanced similarity scoring
+        """
+        with safe_span("hybrid_search.multi_dimensional"):
+            try:
+                logger.info(f"Starting multi-dimensional search for query: {query[:100]}...")
+
+                # Get base vector search results for comparison
+                base_results = await self.vector_search(
+                    query, match_count * 2, table_name, filter_metadata, select_fields
+                )
+
+                if not base_results:
+                    logger.warning("No base results found for multi-dimensional search")
+                    return []
+
+                # For now, use enhanced similarity calculation on existing embeddings
+                # In a full implementation, we would use MultiVectorEmbedding objects
+                enhanced_results = []
+                for result in base_results:
+                    if result.get("embedding"):
+                        # Calculate enhanced similarity
+                        base_similarity = result.get("similarity", 0.0)
+                        result_vector = result["embedding"]
+
+                        # Get query embedding for comparison
+                        query_embedding = await create_embedding(query)
+                        if query_embedding:
+                            enhanced_similarity = self._enhanced_similarity_calculation(
+                                query_embedding, result_vector, base_similarity
+                            )
+
+                            # Create enhanced result
+                            enhanced_result = result.copy()
+                            enhanced_result["similarity"] = enhanced_similarity
+                            enhanced_result["match_type"] = "multi_dimensional"
+                            enhanced_result["enhanced_scoring"] = True
+
+                            enhanced_results.append(enhanced_result)
+
+                # Sort by enhanced similarity
+                enhanced_results.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+
+                # Filter by similarity threshold
+                filtered_results = [
+                    result for result in enhanced_results
+                    if result.get("similarity", 0) >= similarity_threshold
+                ]
+
+                logger.info(
+                    f"Multi-dimensional search completed: {len(filtered_results)} results "
+                    f"(threshold: {similarity_threshold})"
+                )
+
+                return filtered_results[:match_count]
+
+            except Exception as e:
+                logger.error(f"Error in multi-dimensional search: {e}")
+                # Fallback to base results
+                return base_results[:match_count]
+
+    def _enhanced_similarity_calculation(
+        self,
+        query_vector: list[float],
+        result_vector: list[float],
+        base_similarity: float
+    ) -> float:
+        """Calculate enhanced similarity with multiple factors."""
+        try:
+            import numpy as np
+
+            # Base cosine similarity
+            query_array = np.array(query_vector)
+            result_array = np.array(result_vector)
+
+            # Calculate cosine similarity
+            dot_product = np.dot(query_array, result_array)
+            norm_query = np.linalg.norm(query_array)
+            norm_result = np.linalg.norm(result_array)
+
+            if norm_query == 0 or norm_result == 0:
+                return base_similarity
+
+            cosine_similarity = dot_product / (norm_query * norm_result)
+
+            # Enhanced scoring: combine base similarity with cosine similarity
+            # Weight towards cosine similarity for better semantic matching
+            enhanced_score = (base_similarity * 0.3) + (float(cosine_similarity) * 0.7)
+
+            # Ensure score is between 0 and 1
+            return max(0.0, min(1.0, enhanced_score))
+
+        except Exception as e:
+            logger.error(f"Error in enhanced similarity calculation: {e}")
+            return base_similarity
+
+    async def advanced_rerank_search(
+        self,
+        query: str,
+        match_count: int,
+        table_name: str = "documents",
+        filter_metadata: dict | None = None,
+        select_fields: str | None = None,
+        rerank_weights: dict | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Perform search with advanced reranking for improved result quality.
+
+        Args:
+            query: The search query text
+            match_count: Number of results to return
+            table_name: The table to search
+            filter_metadata: Optional metadata filters
+            select_fields: Fields to select from results
+            rerank_weights: Custom weights for reranking factors
+
+        Returns:
+            List of search results with advanced reranking applied
+        """
+        with safe_span("hybrid_search.advanced_rerank"):
+            try:
+                logger.info(f"Starting advanced rerank search for query: {query[:100]}...")
+
+                # Get base search results (use multi-dimensional if available)
+                base_results = await self.multi_dimensional_search(
+                    query, match_count * 3, table_name, filter_metadata, select_fields
+                )
+
+                if not base_results:
+                    logger.warning("No base results found for advanced reranking")
+                    return []
+
+                # Apply advanced reranking
+                reranked_results = await advanced_reranking_service.rerank_results(
+                    query, base_results
+                )
+
+                # Convert back to original format for compatibility
+                final_results = []
+                for reranked in reranked_results[:match_count]:
+                    result = reranked.original_result.copy()
+                    result["reranked_score"] = reranked.reranked_score
+                    result["reranking_factors"] = reranked.reranking_factors
+                    result["reranking_explanations"] = reranked.explanations
+                    result["match_type"] = "advanced_reranked"
+                    final_results.append(result)
+
+                # Get reranking insights
+                insights = await advanced_reranking_service.get_reranking_insights(query, reranked_results[:5])
+
+                logger.info(
+                    f"Advanced rerank search completed: {len(final_results)} results "
+                    f"(avg score: {sum(r.get('reranked_score', 0) for r in final_results) / len(final_results):.3f})"
+                )
+
+                return final_results
+
+            except Exception as e:
+                logger.error(f"Error in advanced rerank search: {e}")
+                # Fallback to base multi-dimensional search
+                return await self.multi_dimensional_search(
+                    query, match_count, table_name, filter_metadata, select_fields
+                )

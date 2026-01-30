@@ -533,7 +533,12 @@ async def get_test_status(execution_id: str):
 
         if execution_id not in test_executions:
             logfire.warning(f"Test execution not found | execution_id={execution_id}")
-            raise HTTPException(status_code=404, detail="Test execution not found")
+            return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="Test execution not found",
+            status_code=404
+        )
 
         execution = test_executions[execution_id]
 
@@ -556,7 +561,12 @@ async def get_test_status(execution_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to get test status | error={str(e)} | execution_id={execution_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 @router.get("/history", response_model=TestHistoryResponse)
@@ -599,7 +609,12 @@ async def get_test_history(limit: int = 50, offset: int = 0):
         logfire.error(
             f"Failed to get test history | error={str(e)} | limit={limit} | offset={offset}"
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 @router.delete("/execution/{execution_id}")
@@ -612,7 +627,12 @@ async def cancel_test_execution(execution_id: str):
             logfire.warning(
                 f"Test execution not found for cancellation | execution_id={execution_id}"
             )
-            raise HTTPException(status_code=404, detail="Test execution not found")
+            return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="Test execution not found",
+            status_code=404
+        )
 
         execution = test_executions[execution_id]
 
@@ -620,7 +640,12 @@ async def cancel_test_execution(execution_id: str):
             logfire.warning(
                 f"Test execution cannot be cancelled | execution_id={execution_id} | status={execution.status}"
             )
-            raise HTTPException(status_code=400, detail="Test execution cannot be cancelled")
+            return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="Test execution cannot be cancelled",
+            status_code=400
+        )
 
         # Try to terminate the process
         if execution.process:
@@ -658,7 +683,12 @@ async def cancel_test_execution(execution_id: str):
         logfire.error(
             f"Failed to cancel test execution | error={str(e)} | execution_id={execution_id}"
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 # WebSocket endpoint for real-time test output
@@ -721,7 +751,12 @@ async def get_latest_test_results():
     try:
         # Get the most recent completed execution
         if not test_executions:
-            raise HTTPException(status_code=404, detail="No test results available")
+            return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="No test results available",
+            status_code=404
+        )
 
         # Sort executions by started_at descending to get the latest
         executions = list(test_executions.values())
@@ -735,7 +770,12 @@ async def get_latest_test_results():
                 break
 
         if not latest_execution:
-            raise HTTPException(status_code=404, detail="No completed test results available")
+            return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="No completed test results available",
+            status_code=404
+        )
 
         # Return execution details with output
         return {
@@ -756,4 +796,9 @@ async def get_latest_test_results():
         raise
     except Exception as e:
         logger.error(f"Failed to get latest test results: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))

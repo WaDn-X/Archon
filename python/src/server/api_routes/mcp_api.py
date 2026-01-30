@@ -16,7 +16,7 @@ from typing import Any
 
 import docker
 from docker.errors import APIError, NotFound
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Request
 from pydantic import BaseModel
 
 # Import unified logging
@@ -561,7 +561,12 @@ async def start_server():
             api_logger.error("MCP server start API failed - error=%s", str(e))
             safe_set_attribute(span, "success", False)
             safe_set_attribute(span, "error", str(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 @router.post("/stop", response_model=ServerResponse)
@@ -580,7 +585,12 @@ async def stop_server():
             api_logger.error(f"MCP server stop API failed - error={str(e)}")
             safe_set_attribute(span, "success", False)
             safe_set_attribute(span, "error", str(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 @router.get("/status")
@@ -599,7 +609,12 @@ async def get_status():
         except Exception as e:
             api_logger.error(f"MCP server status API failed - error={str(e)}")
             safe_set_attribute(span, "error", str(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 @router.get("/logs")
@@ -618,7 +633,12 @@ async def get_logs(limit: int = 100):
         except Exception as e:
             api_logger.error("MCP server logs API failed", error=str(e))
             safe_set_attribute(span, "error", str(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 @router.delete("/logs")
@@ -637,7 +657,12 @@ async def clear_logs():
             api_logger.error("MCP server clear logs API failed", error=str(e))
             safe_set_attribute(span, "success", False)
             safe_set_attribute(span, "error", str(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 @router.get("/config")
@@ -700,7 +725,12 @@ async def get_mcp_config():
         except Exception as e:
             api_logger.error("Failed to get MCP configuration", error=str(e))
             safe_set_attribute(span, "error", str(e))
-            raise HTTPException(status_code=500, detail={"error": str(e)})
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/config")
@@ -743,7 +773,12 @@ async def save_configuration(config: ServerConfig):
         except Exception as e:
             api_logger.error(f"Failed to save MCP configuration | error={str(e)}")
             safe_set_attribute(span, "error", str(e))
-            raise HTTPException(status_code=500, detail={"error": str(e)})
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.websocket("/logs/stream")

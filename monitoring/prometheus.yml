@@ -1,0 +1,54 @@
+# Prometheus configuration for Zippy-Archon
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:${PROMETHEUS_PORT:-9090}']
+
+  - job_name: 'archon-server'
+    static_configs:
+      - targets: ['archon-server:${ARCHON_SERVER_PORT:-8181}']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  - job_name: 'archon-mcp'
+    static_configs:
+      - targets: ['archon-mcp:${ARCHON_MCP_PORT:-8051}']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  - job_name: 'archon-agents'
+    static_configs:
+      - targets: ['archon-agents:${ARCHON_AGENTS_PORT:-8052}']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  - job_name: 'archon-frontend'
+    static_configs:
+      - targets: ['archon-frontend:${ARCHON_UI_PORT:-3737}']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:${POSTGRES_PORT:-5432}']
+    scrape_interval: 30s
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:${REDIS_PORT:-6379}']
+    scrape_interval: 30s
+
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:${NGINX_PORT:-8280}']
+    scrape_interval: 30s
+
+

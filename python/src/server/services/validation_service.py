@@ -8,9 +8,12 @@ to prevent injection attacks and ensure data integrity.
 import re
 import html
 import logging
+import bleach
 from typing import Any, Dict, List, Optional, Union, Callable
 from dataclasses import dataclass
 from urllib.parse import urlparse
+import ipaddress
+from email_validator import validate_email, EmailNotValidError
 
 from .error_service import error_service
 
@@ -434,6 +437,274 @@ class ValidationService:
 
         # Could also send to monitoring service
         # monitoring_service.log_validation_error(field_name, errors, request_context)
+
+    # Enhanced security validation methods
+    def validate_email_address(self, email: str) -> ValidationResult:
+        """Validate email address with enhanced security checks."""
+        result = ValidationResult(is_valid=True, errors=[])
+
+        if not email or not isinstance(email, str):
+            result.add_error("Email is required and must be a string")
+            result.is_valid = False
+            return result
+
+        email = email.strip().lower()
+
+        if len(email) > 254:  # RFC 5321 limit
+            result.add_error("Email address is too long")
+            result.is_valid = False
+            return result
+
+        try:
+            # Use email_validator for comprehensive validation
+            valid = validate_email(email, check_deliverability=False)
+            result.set_value(valid.email)
+        except EmailNotValidError as e:
+            result.add_error(f"Invalid email address: {str(e)}")
+            result.is_valid = False
+
+        return result
+
+    def validate_password_strength(self, password: str) -> ValidationResult:
+        """Validate password strength with security requirements."""
+        result = ValidationResult(is_valid=True, errors=[])
+
+        if not password or not isinstance(password, str):
+            result.add_error("Password is required")
+            result.is_valid = False
+            return result
+
+        # Length requirements
+        if len(password) < 8:
+            result.add_error("Password must be at least 8 characters long")
+            result.is_valid = False
+
+        if len(password) > 128:
+            result.add_error("Password must be less than 128 characters long")
+            result.is_valid = False
+
+        # Complexity requirements
+        if not re.search(r'[A-Z]', password):
+            result.add_error("Password must contain at least one uppercase letter")
+
+        if not re.search(r'[a-z]', password):
+            result.add_error("Password must contain at least one lowercase letter")
+
+        if not re.search(r'\d', password):
+            result.add_error("Password must contain at least one number")
+
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+            result.add_error("Password must contain at least one special character")
+
+        # Check for common weak patterns
+        common_patterns = [
+            r'123456', r'password', r'qwerty', r'abc123',
+            r'admin', r'user', r'login'
+        ]
+
+        for pattern in common_patterns:
+            if pattern in password.lower():
+                result.add_error("Password contains common weak pattern")
+                result.is_valid = False
+                break
+
+        return result
+
+    def validate_url_security(self, url: str, allowed_domains: Optional[List[str]] = None) -> ValidationResult:
+        """Validate URL for security and allowed domains."""
+        result = ValidationResult(is_valid=True, errors=[])
+
+        if not url or not isinstance(url, str):
+            result.add_error("URL is required and must be a string")
+            result.is_valid = False
+            return result
+
+        url = url.strip()
+
+        try:
+            parsed = urlparse(url)
+
+            # Must have scheme
+            if not parsed.scheme:
+                result.add_error("URL must include a scheme (http:// or https://)")
+                result.is_valid = False
+
+            # Must be HTTP or HTTPS
+            if parsed.scheme not in ['http', 'https']:
+                result.add_error("URL must use HTTP or HTTPS protocol")
+                result.is_valid = False
+
+            # Check for suspicious patterns
+            suspicious_patterns = [
+                r'\.\.',  # Double dots
+                r'localhost',
+                r'127\.0\.0\.1',
+                r'0\.0\.0\.0',
+                r'169\.254\.',  # Link-local
+                r'10\.0\.0\.0/8',  # Private network
+                r'172\.16\.0\.0/12',  # Private network
+                r'192\.168\.0\.0/16',  # Private network
+            ]
+
+            for pattern in suspicious_patterns:
+                if re.search(pattern, url, re.IGNORECASE):
+                    result.add_error(f"URL contains suspicious pattern: {pattern}")
+                    result.is_valid = False
+                    break
+
+            # Check allowed domains if specified
+            if allowed_domains and parsed.netloc:
+                domain_allowed = False
+                for allowed_domain in allowed_domains:
+                    if parsed.netloc == allowed_domain or parsed.netloc.endswith('.' + allowed_domain):
+                        domain_allowed = True
+                        break
+
+                if not domain_allowed:
+                    result.add_error(f"Domain {parsed.netloc} is not in allowed domains list")
+                    result.is_valid = False
+
+        except Exception as e:
+            result.add_error(f"Invalid URL format: {str(e)}")
+            result.is_valid = False
+
+        if result.is_valid:
+            result.set_value(url)
+
+        return result
+
+    def validate_file_upload(self, filename: str, content_type: str, file_size: int) -> ValidationResult:
+        """Validate file upload for security."""
+        result = ValidationResult(is_valid=True, errors=[])
+
+        # File size limits (10MB default)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if file_size > max_size:
+            result.add_error(f"File size {file_size} bytes exceeds maximum allowed size {max_size} bytes")
+            result.is_valid = False
+
+        # Allowed file extensions
+        allowed_extensions = {
+            'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+            'document': ['.pdf', '.doc', '.docx', '.txt', '.md'],
+            'archive': ['.zip', '.tar.gz', '.tar.bz2'],
+            'code': ['.py', '.js', '.ts', '.json', '.yaml', '.yml']
+        }
+
+        # Allowed MIME types
+        allowed_mime_types = {
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'application/pdf', 'text/plain', 'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/zip', 'application/x-tar', 'application/json',
+            'text/markdown', 'application/x-yaml'
+        }
+
+        # Extract file extension
+        if '.' in filename:
+            extension = '.' + filename.split('.')[-1].lower()
+
+            # Check if extension is allowed for any category
+            extension_allowed = any(extension in extensions for extensions in allowed_extensions.values())
+            if not extension_allowed:
+                result.add_error(f"File extension {extension} is not allowed")
+                result.is_valid = False
+
+        # Validate MIME type
+        if content_type not in allowed_mime_types:
+            result.add_error(f"MIME type {content_type} is not allowed")
+            result.is_valid = False
+
+        # Check for suspicious filenames
+        suspicious_names = [
+            'con', 'prn', 'aux', 'nul', 'com1', 'com2', 'com3', 'com4',
+            'lpt1', 'lpt2', 'lpt3', 'lpt4'
+        ]
+
+        base_name = filename.split('.')[0].lower() if '.' in filename else filename.lower()
+        if base_name in suspicious_names:
+            result.add_error(f"Filename {filename} is not allowed (reserved system name)")
+            result.is_valid = False
+
+        # Check for path traversal attempts
+        if '..' in filename or '/' in filename or '\\' in filename:
+            result.add_error("Filename contains invalid path characters")
+            result.is_valid = False
+
+        return result
+
+    def validate_ip_address(self, ip_str: str) -> ValidationResult:
+        """Validate IP address format and security."""
+        result = ValidationResult(is_valid=True, errors=[])
+
+        try:
+            ip = ipaddress.ip_address(ip_str)
+
+            # Check for private/reserved addresses that shouldn't be allowed
+            if ip.is_private:
+                result.add_error("Private IP addresses are not allowed")
+                result.is_valid = False
+            elif ip.is_loopback:
+                result.add_error("Loopback addresses are not allowed")
+                result.is_valid = False
+            elif ip.is_link_local:
+                result.add_error("Link-local addresses are not allowed")
+                result.is_valid = False
+            elif ip.is_reserved:
+                result.add_error("Reserved IP addresses are not allowed")
+                result.is_valid = False
+
+            result.set_value(str(ip))
+
+        except ValueError as e:
+            result.add_error(f"Invalid IP address format: {str(e)}")
+            result.is_valid = False
+
+        return result
+
+    def sanitize_html_content(self, html_content: str, allowed_tags: Optional[List[str]] = None) -> ValidationResult:
+        """Sanitize HTML content for security."""
+        result = ValidationResult(is_valid=True, errors=[])
+
+        if not html_content or not isinstance(html_content, str):
+            result.set_value("")
+            return result
+
+        # Default allowed tags for rich text content
+        if allowed_tags is None:
+            allowed_tags = [
+                'p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'a', 'img'
+            ]
+
+        allowed_attrs = {
+            'a': ['href', 'title'],
+            'img': ['src', 'alt', 'title']
+        }
+
+        try:
+            # Use bleach for comprehensive HTML sanitization
+            sanitized = bleach.clean(
+                html_content,
+                tags=allowed_tags,
+                attributes=allowed_attrs,
+                strip=True
+            )
+
+            # Additional security checks
+            if len(sanitized) > 10000:  # 10KB limit for HTML content
+                result.add_error("HTML content is too long after sanitization")
+                result.is_valid = False
+            else:
+                result.set_value(sanitized)
+
+        except Exception as e:
+            result.add_error(f"HTML sanitization failed: {str(e)}")
+            result.is_valid = False
+            # Fallback to text-only sanitization
+            result.set_value(self.sanitize_string(html_content))
+
+        return result
 
 
 # Global validation service instance

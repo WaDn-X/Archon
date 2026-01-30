@@ -40,6 +40,16 @@ class CacheConfig:
     max_memory: str = "256mb"
     eviction_policy: str = "allkeys-lru"
 
+    # Performance optimizations
+    compression_enabled: bool = True
+    pipeline_batch_size: int = 100
+    connection_pool_size: int = 10
+
+    # Cache strategies
+    use_local_cache: bool = True
+    local_cache_size: int = 1000
+    cache_warmup_enabled: bool = True
+
 
 @dataclass
 class CacheStats:

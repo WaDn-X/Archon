@@ -118,6 +118,19 @@ async def get_llm_client(provider: str | None = None, use_embedding_provider: bo
             )
             logger.info("Google Gemini client created successfully")
 
+        elif provider_name == "xai":
+            if not api_key:
+                raise ValueError("XAI API key not found")
+
+            # Enhanced XAI client with better configuration
+            client = openai.AsyncOpenAI(
+                api_key=api_key,
+                base_url=base_url or "https://api.x.ai/v1/",
+                timeout=60.0,  # Longer timeout for XAI
+                max_retries=3,  # Retry on transient failures
+            )
+            logger.info("XAI (Grok) client created successfully with enhanced configuration")
+
         else:
             raise ValueError(f"Unsupported LLM provider: {provider_name}")
 
@@ -178,6 +191,10 @@ async def get_embedding_model(provider: str | None = None) -> str:
         elif provider_name == "google":
             # Google's embedding model
             return "text-embedding-004"
+        elif provider_name == "xai":
+            # XAI doesn't have embedding models yet, fallback to OpenAI
+            # But we can use XAI for chat and OpenAI for embeddings
+            return "text-embedding-3-small"
         else:
             # Fallback to OpenAI's model
             return "text-embedding-3-small"

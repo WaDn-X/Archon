@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 
 router = APIRouter(prefix="/api/coverage", tags=["coverage"])
@@ -48,7 +48,12 @@ async def get_pytest_coverage_json() -> dict[str, Any]:
     """Get pytest coverage data as JSON"""
     coverage_file = PYTEST_COVERAGE_PATH / "coverage.json"
     if not coverage_file.exists():
-        raise HTTPException(status_code=404, detail="Coverage data not found")
+        return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="Coverage data not found",
+            status_code=404
+        )
 
     with open(coverage_file) as f:
         return json.load(f)
@@ -59,7 +64,12 @@ async def get_pytest_coverage_html(path: str) -> FileResponse:
     """Serve pytest HTML coverage report files"""
     file_path = PYTEST_COVERAGE_PATH / "htmlcov" / path
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="File not found",
+            status_code=404
+        )
 
     # Determine content type based on file extension
     content_type = "text/html"
@@ -78,7 +88,12 @@ async def get_vitest_coverage_json() -> dict[str, Any]:
     """Get vitest coverage data as JSON"""
     coverage_file = VITEST_COVERAGE_PATH / "coverage-final.json"
     if not coverage_file.exists():
-        raise HTTPException(status_code=404, detail="Coverage data not found")
+        return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="Coverage data not found",
+            status_code=404
+        )
 
     with open(coverage_file) as f:
         return json.load(f)
@@ -89,7 +104,12 @@ async def get_vitest_coverage_summary() -> dict[str, Any]:
     """Get vitest coverage summary"""
     summary_file = VITEST_COVERAGE_PATH / "coverage-summary.json"
     if not summary_file.exists():
-        raise HTTPException(status_code=404, detail="Coverage summary not found")
+        return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="Coverage summary not found",
+            status_code=404
+        )
 
     with open(summary_file) as f:
         return json.load(f)
@@ -100,7 +120,12 @@ async def get_vitest_coverage_html(path: str) -> FileResponse:
     """Serve vitest HTML coverage report files"""
     file_path = VITEST_COVERAGE_PATH / path
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="File not found",
+            status_code=404
+        )
 
     # Determine content type based on file extension
     content_type = "text/html"

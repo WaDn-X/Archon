@@ -1,0 +1,139 @@
+# Staging Docker Compose Configuration for Zippy-Archon
+# Used for CI/CD deployment testing
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Staging)
+  postgres:
+    image: postgres:15-alpine
+    container_name: zippy-archon-staging-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zippy_archon_staging
+      POSTGRES_USER: zippy_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-staging_password}
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zippy_user -d zippy_archon_staging"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis Cache (Staging)
+  redis:
+    image: redis:7-alpine
+    container_name: zippy-archon-staging-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-staging_redis}
+    volumes:
+      - redis_staging_data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Main Application Server (FastAPI)
+  archon-server:
+    build:
+      context: ./python
+      dockerfile: Dockerfile.server
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        ENVIRONMENT: staging
+    container_name: zippy-archon-staging-server
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: staging
+      RELEASE_VERSION: ${RELEASE_VERSION:-staging}
+      LOG_LEVEL: INFO
+      # Database
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DATABASE_URL: postgresql://zippy_user:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/zippy_archon_staging
+      # AI Providers
+      XAI_API_KEY: ${XAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ZIPPY_API_KEY: ${ZIPPY_API_KEY}
+      # Security
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      RATE_LIMIT_REQUESTS: 1000
+      RATE_LIMIT_WINDOW: 60
+      # Caching
+      REDIS_URL: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-staging_redis}
+      # Monitoring
+      SENTRY_DSN: ${SENTRY_DSN}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
+      # Services
+      ARCHON_SERVER_PORT: 8181
+      ARCHON_MCP_PORT: 8051
+      ARCHON_AGENTS_PORT: 8052
+    ports:
+      - "${ARCHON_SERVER_PORT:-8182}:${ARCHON_SERVER_PORT:-8181}"
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8181/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Frontend Application
+  archon-frontend:
+    build:
+      context: ./archon-ui-main
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    container_name: zippy-archon-staging-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8182}
+      VITE_ARCHON_SERVER_PORT: 8182
+      NODE_ENV: staging
+    ports:
+      - "${ARCHON_UI_PORT:-3738}:${ARCHON_UI_PORT:-3737}"
+    networks:
+      - app-network
+    depends_on:
+      - archon-server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3737"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  postgres_staging_data:
+    driver: local
+  redis_staging_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+

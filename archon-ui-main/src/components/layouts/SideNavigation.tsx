@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, HardDrive, Settings } from 'lucide-react';
+import { BookOpen, HardDrive, Settings, Menu, X } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 /**
  * Interface for navigation items
@@ -16,6 +16,7 @@ export interface NavigationItem {
 interface SideNavigationProps {
   className?: string;
   'data-id'?: string;
+  mobileMode?: boolean; // For mobile navigation in top bar
 }
 /**
  * Tooltip component for navigation items
@@ -45,10 +46,12 @@ const NavTooltip: React.FC<{
  */
 export const SideNavigation: React.FC<SideNavigationProps> = ({
   className = '',
-  'data-id': dataId
+  'data-id': dataId,
+  mobileMode = false
 }) => {
   // State to track which tooltip is currently visible
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { projectsEnabled } = useSettings();
   
   // Default navigation items
@@ -78,6 +81,52 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     ${projectsEnabled ? 'hover:bg-white/10 dark:hover:bg-white/5 cursor-pointer' : 'opacity-50 cursor-not-allowed'}
   `;
   
+  // Handle mobile navigation differently
+  if (mobileMode) {
+    return (
+      <div className="relative">
+        {/* Mobile menu toggle button */}
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-2 rounded-lg bg-white/10 backdrop-blur-md border border-gray-200 dark:border-zinc-800/50 hover:bg-white/20 transition-colors"
+          aria-label="Toggle navigation menu"
+        >
+          {isMobileMenuOpen ? (
+            <X className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+          ) : (
+            <Menu className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+          )}
+        </button>
+
+        {/* Mobile dropdown menu */}
+        {isMobileMenuOpen && (
+          <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-900 border border-gray-200 dark:border-zinc-800 rounded-lg shadow-lg z-50">
+            <div className="p-2 space-y-1">
+              {navigationItems.map(item => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                      isActive
+                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return <div data-id={dataId} className={`flex flex-col items-center gap-6 py-6 px-3 rounded-xl backdrop-blur-md bg-gradient-to-b from-white/80 to-white/60 dark:from-white/10 dark:to-black/30 border border-gray-200 dark:border-zinc-800/50 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_10px_30px_-15px_rgba(0,0,0,0.7)] ${className}`}>
       {/* Logo - Conditionally clickable based on Projects enabled */}
       {projectsEnabled ? (

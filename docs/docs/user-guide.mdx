@@ -1,0 +1,479 @@
+---
+title: User Guide
+sidebar_position: 2
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import Admonition from '@theme/Admonition';
+
+# Zippy Archon User Guide
+
+Welcome to Zippy Archon! This comprehensive guide will help you get started with our AI-powered development platform. Whether you're new to AI-assisted development or an experienced developer, this guide covers everything you need to know.
+
+## 🚀 Getting Started
+
+### First-Time Setup
+
+When you first launch Zippy Archon, you'll be guided through a comprehensive onboarding process:
+
+#### 1. Welcome & Introduction
+- Overview of Archon's capabilities
+- Quick introduction to AI-powered development
+
+#### 2. AI Provider Configuration
+- **OpenAI**: Connect your OpenAI API key for GPT models
+- **Google Gemini**: Configure Google AI access
+- **Ollama**: Set up local AI model serving
+- **Zippy AI**: Use our hosted AI services
+
+#### 3. Knowledge Base Setup
+- **Website Crawling**: Extract knowledge from documentation sites
+- **Document Upload**: Add PDFs, text files, and code repositories
+- **GitHub Integration**: Import repositories and documentation
+
+#### 4. Project Creation
+- Create your first project to organize tasks
+- Import existing Git repositories
+- Set up team collaboration
+
+#### 5. Feature Tour
+Explore Archon's key capabilities:
+- 🤖 AI-powered task management
+- 🗄️ Intelligent knowledge retrieval
+- 👥 Real-time team collaboration
+- 📊 Progress tracking and analytics
+
+## 🧠 Core Features
+
+### AI-Powered Task Management
+
+#### Creating Tasks
+```typescript
+// Tasks can be created with AI assistance
+const task = {
+  title: "Implement user authentication",
+  description: "Add JWT-based authentication with refresh tokens",
+  priority: "high",
+  assignee: "developer@company.com"
+};
+```
+
+#### AI Task Breakdown
+Archon can automatically break down complex tasks into manageable steps:
+
+1. **Analysis**: AI analyzes the task requirements
+2. **Decomposition**: Breaks down into smaller, actionable items
+3. **Dependencies**: Identifies task relationships and prerequisites
+4. **Estimation**: Provides time estimates based on similar tasks
+
+#### Smart Prioritization
+Tasks are automatically prioritized based on:
+- **Deadline urgency**
+- **Dependency impact**
+- **User work patterns**
+- **Team capacity**
+
+### Knowledge Management
+
+#### Adding Knowledge Sources
+
+<Tabs>
+<TabItem value="web-crawling" label="Web Crawling">
+
+```bash
+# Crawl a documentation website
+curl -X POST http://localhost:8080/api/knowledge/crawl \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://developer.example.com/docs",
+    "depth": 2,
+    "include_patterns": ["*.html", "*.md"]
+  }'
+```
+
+</TabItem>
+<TabItem value="document-upload" label="Document Upload">
+
+```typescript
+// Upload documents via the UI
+const formData = new FormData();
+formData.append('file', documentFile);
+formData.append('category', 'technical-docs');
+
+fetch('/api/knowledge/upload', {
+  method: 'POST',
+  body: formData
+});
+```
+
+</TabItem>
+<TabItem value="github-import" label="GitHub Import">
+
+```bash
+# Import a GitHub repository
+curl -X POST http://localhost:8080/api/knowledge/github-import \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repo_url": "https://github.com/company/project",
+    "include_docs": true,
+    "include_code": false
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+#### Knowledge Search & Retrieval
+
+```typescript
+// Semantic search across knowledge base
+const results = await searchKnowledge({
+  query: "authentication best practices",
+  filters: {
+    category: "security",
+    date_range: "last_30_days"
+  },
+  limit: 10
+});
+```
+
+### Real-time Collaboration
+
+#### Team Communication
+
+```typescript
+// Send real-time updates
+socket.emit('task-update', {
+  taskId: 'task-123',
+  status: 'completed',
+  userId: 'user-456',
+  timestamp: Date.now()
+});
+
+// Listen for team updates
+socket.on('project-update', (update) => {
+  console.log('Project updated:', update);
+});
+```
+
+#### Live Editing
+- **Operational Transform**: Conflict-free concurrent editing
+- **Presence Indicators**: See who's online and what they're working on
+- **Change History**: Track all modifications with timestamps
+
+### Project Management
+
+#### Creating Projects
+
+```typescript
+const project = await createProject({
+  title: "E-commerce Platform",
+  description: "Modern e-commerce solution with AI recommendations",
+  github_repo: "https://github.com/company/ecommerce",
+  technical_sources: ["api-docs", "architecture-diagrams"],
+  business_sources: ["requirements", "user-stories"]
+});
+```
+
+#### Task Organization
+
+```typescript
+// Create task hierarchy
+const epic = await createTask({
+  project_id: project.id,
+  title: "User Management System",
+  type: "epic",
+  description: "Complete user management implementation"
+});
+
+const story = await createTask({
+  project_id: project.id,
+  parent_id: epic.id,
+  title: "User Registration",
+  type: "story",
+  description: "Implement user registration flow"
+});
+```
+
+## 🔧 Configuration & Settings
+
+### AI Provider Setup
+
+#### OpenAI Configuration
+```bash
+# Set OpenAI API key
+curl -X POST http://localhost:8080/api/settings/credentials \
+  -H "Content-Type: application/json" \
+  -d '{
+    "key": "OPENAI_API_KEY",
+    "value": "sk-your-api-key-here",
+    "category": "api_keys"
+  }'
+```
+
+#### Model Selection
+```typescript
+// Configure preferred models
+const settings = {
+  llm_provider: "openai",
+  embedding_model: "text-embedding-ada-002",
+  chat_model: "gpt-4",
+  temperature: 0.7,
+  max_tokens: 2000
+};
+```
+
+### System Preferences
+
+#### Theme & UI
+```typescript
+// Configure UI preferences
+const uiSettings = {
+  theme: "dark", // or "light" or "system"
+  language: "en",
+  timezone: "America/New_York",
+  notifications: {
+    email: true,
+    browser: true,
+    slack: false
+  }
+};
+```
+
+#### Performance Settings
+```typescript
+// Optimize for your environment
+const performanceSettings = {
+  max_concurrent_crawls: 5,
+  cache_ttl: 3600, // 1 hour
+  batch_size: 10,
+  enable_compression: true
+};
+```
+
+## 📊 Analytics & Reporting
+
+### Project Analytics
+
+```typescript
+// Get project progress metrics
+const analytics = await getProjectAnalytics(projectId, {
+  date_range: "last_30_days",
+  include_tasks: true,
+  include_team: true
+});
+
+console.log(`Project completion: ${analytics.completion_percentage}%`);
+console.log(`Tasks completed: ${analytics.tasks_completed}/${analytics.total_tasks}`);
+```
+
+### Team Productivity
+
+```typescript
+// Analyze team performance
+const teamMetrics = await getTeamMetrics(teamId, {
+  period: "monthly",
+  include_velocity: true,
+  include_quality: true
+});
+
+console.log(`Team velocity: ${teamMetrics.velocity} points/week`);
+console.log(`Code quality score: ${teamMetrics.quality_score}/100`);
+```
+
+### AI Performance Tracking
+
+```typescript
+// Monitor AI assistance effectiveness
+const aiMetrics = await getAIMetrics({
+  timeframe: "weekly",
+  include_accuracy: true,
+  include_speed: true
+});
+
+console.log(`AI response accuracy: ${aiMetrics.accuracy}%`);
+console.log(`Average response time: ${aiMetrics.avg_response_time}ms`);
+```
+
+## 🔒 Security & Privacy
+
+### Data Protection
+
+<Admonition type="info">
+**Your data security is our priority**
+
+- All API keys are encrypted at rest
+- Communications use HTTPS/TLS encryption
+- Knowledge base content is indexed for search but not stored in plain text externally
+- Access controls ensure users only see authorized content
+</Admonition>
+
+### Access Control
+
+```typescript
+// Set up role-based permissions
+const permissions = {
+  admin: ["read", "write", "delete", "manage_users"],
+  developer: ["read", "write", "create_projects"],
+  viewer: ["read"]
+};
+
+// Assign team member roles
+await assignTeamRole(userId, projectId, "developer");
+```
+
+### Audit Logging
+
+```typescript
+// View audit logs
+const auditLogs = await getAuditLogs({
+  user_id: userId,
+  action: "project_created",
+  date_from: "2024-01-01",
+  date_to: "2024-12-31"
+});
+```
+
+## 🚀 Advanced Features
+
+### Custom Workflows
+
+```typescript
+// Create custom automation workflows
+const workflow = await createWorkflow({
+  name: "Code Review Pipeline",
+  triggers: ["pull_request_created"],
+  steps: [
+    {
+      type: "ai_analysis",
+      config: { model: "gpt-4", prompt: "security-review" }
+    },
+    {
+      type: "test_execution",
+      config: { test_suite: "integration" }
+    },
+    {
+      type: "notification",
+      config: { channels: ["slack", "email"] }
+    }
+  ]
+});
+```
+
+### Integration APIs
+
+#### Webhook Configuration
+```typescript
+// Set up webhooks for external integrations
+const webhook = await createWebhook({
+  url: "https://company.slack.com/webhook",
+  events: ["task_completed", "project_milestone"],
+  secret: "webhook-secret-key"
+});
+```
+
+#### API Token Management
+```typescript
+// Generate API tokens for integrations
+const token = await generateAPIToken({
+  name: "Jenkins CI",
+  permissions: ["read_projects", "update_tasks"],
+  expires_at: "2025-12-31"
+});
+```
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+#### API Connection Problems
+```bash
+# Check service health
+curl http://localhost:8080/health
+
+# Verify configuration
+curl http://localhost:8080/api/settings/status
+```
+
+#### AI Provider Issues
+```bash
+# Test AI provider connectivity
+curl -X POST http://localhost:8080/api/test/ai-provider \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "openai"}'
+```
+
+#### Database Connection Issues
+```bash
+# Check database connectivity
+curl http://localhost:8080/api/test/database
+
+# View connection logs
+docker-compose logs archon-server
+```
+
+### Performance Optimization
+
+#### Caching Configuration
+```typescript
+// Enable aggressive caching for better performance
+const cacheConfig = {
+  enable_redis: true,
+  cache_ttl: 7200, // 2 hours
+  compress_responses: true,
+  preload_frequent_queries: true
+};
+```
+
+#### Resource Management
+```typescript
+// Optimize resource usage
+const resourceConfig = {
+  max_concurrent_users: 100,
+  memory_limit: "2GB",
+  cpu_limit: "2.0",
+  enable_connection_pooling: true
+};
+```
+
+## 📞 Support & Resources
+
+### Getting Help
+
+1. **Documentation**: Check this guide and API reference
+2. **Community**: Join our Discord community for peer support
+3. **GitHub Issues**: Report bugs and request features
+4. **Professional Support**: Enterprise support available
+
+### Learning Resources
+
+- **Quick Start Guide**: `/docs/getting-started`
+- **Video Tutorials**: Step-by-step walkthroughs
+- **API Examples**: Code samples for common integrations
+- **Best Practices**: Optimization and security guides
+
+### Stay Updated
+
+```typescript
+// Check for updates programmatically
+const updates = await checkForUpdates();
+if (updates.available) {
+  console.log(`New version ${updates.version} available!`);
+  console.log(`Release notes: ${updates.release_notes_url}`);
+}
+```
+
+---
+
+<Admonition type="success">
+**Ready to build something amazing?**
+
+You're now equipped to leverage Zippy Archon's full potential. Start by creating your first project, adding knowledge sources, and exploring our AI-powered features. Happy building! 🚀
+</Admonition>
+
+
+
+
+
+

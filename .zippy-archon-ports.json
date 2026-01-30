@@ -1,0 +1,66 @@
+{
+  "generated_at": 1735948800.0,
+  "environment": "development",
+  "allocations": {
+    "ARCHON_SERVER_PORT": {
+      "service_name": "Main Server",
+      "original_port": 8181,
+      "allocated_port": 8181,
+      "is_conflict": false
+    },
+    "ARCHON_MCP_PORT": {
+      "service_name": "MCP Server",
+      "original_port": 8051,
+      "allocated_port": 8051,
+      "is_conflict": false
+    },
+    "ARCHON_AGENTS_PORT": {
+      "service_name": "AI Agents",
+      "original_port": 8052,
+      "allocated_port": 8052,
+      "is_conflict": false
+    },
+    "ARCHON_UI_PORT": {
+      "service_name": "Frontend UI",
+      "original_port": 3737,
+      "allocated_port": 3737,
+      "is_conflict": false
+    },
+    "POSTGRES_PORT": {
+      "service_name": "PostgreSQL",
+      "original_port": 5432,
+      "allocated_port": 5432,
+      "is_conflict": false
+    },
+    "REDIS_PORT": {
+      "service_name": "Redis",
+      "original_port": 6379,
+      "allocated_port": 6379,
+      "is_conflict": false
+    },
+    "PROMETHEUS_PORT": {
+      "service_name": "Prometheus",
+      "original_port": 9090,
+      "allocated_port": 9090,
+      "is_conflict": false
+    },
+    "GRAFANA_PORT": {
+      "service_name": "Grafana",
+      "original_port": 3827,
+      "allocated_port": 3827,
+      "is_conflict": false
+    },
+    "NGINX_PORT": {
+      "service_name": "Nginx",
+      "original_port": 8280,
+      "allocated_port": 8280,
+      "is_conflict": false
+    },
+    "NGINX_SSL_PORT": {
+      "service_name": "Nginx SSL",
+      "original_port": 8443,
+      "allocated_port": 8443,
+      "is_conflict": false
+    }
+  }
+}

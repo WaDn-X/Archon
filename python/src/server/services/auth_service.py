@@ -175,9 +175,28 @@ class AuthService:
         # Try API key
         api_key = request.headers.get("x-api-key") or request.query_params.get("api_key")
         if api_key:
-            # Note: In async context, this should be awaited
-            # For now, return None - will be handled by dependency
-            pass
+            # For synchronous calls, we need to handle this differently
+            # This will be improved when we convert to async middleware
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is running, we can't await here
+                    # Return None and let the dependency handle it
+                    return None
+                else:
+                    # Create a new loop for this call
+                    user = loop.run_until_complete(self.authenticate_api_key(api_key))
+                    return user
+            except RuntimeError:
+                # No event loop, create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    user = loop.run_until_complete(self.authenticate_api_key(api_key))
+                    return user
+                finally:
+                    loop.close()
 
         # Try session cookie
         session_token = request.cookies.get("session_token")

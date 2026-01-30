@@ -9,6 +9,25 @@ export { Alert, AlertTitle, AlertDescription } from './Alert';
 export { LanguageSelector } from './LanguageSelector';
 export { CollapsibleSettingsCard } from './CollapsibleSettingsCard';
 
+// Loading Components
+export {
+  LoadingSkeleton,
+  CardSkeleton,
+  KnowledgeItemSkeleton,
+  ProjectCardSkeleton,
+  TaskListSkeleton
+} from './LoadingSkeleton';
+
+export {
+  LoadingState,
+  PageLoadingState,
+  SectionLoadingState,
+  CardLoadingState,
+  ListLoadingState,
+  FormLoadingState,
+  ProgressLoadingState
+} from './LoadingStates';
+
 // Re-export utilities
 export { cn } from '../../utils/cn';
 

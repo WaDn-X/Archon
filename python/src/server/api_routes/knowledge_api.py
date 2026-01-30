@@ -116,7 +116,12 @@ async def test_socket_progress(progress_id: str):
             "data": test_data,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/knowledge-items/sources")
@@ -128,7 +133,12 @@ async def get_knowledge_sources():
         return []
     except Exception as e:
         safe_logfire_error(f"Failed to get knowledge sources | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/knowledge-items")
@@ -148,7 +158,12 @@ async def get_knowledge_items(
         safe_logfire_error(
             f"Failed to get knowledge items | error={str(e)} | page={page} | per_page={per_page}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.put("/knowledge-items/{source_id}")
@@ -163,9 +178,19 @@ async def update_knowledge_item(source_id: str, updates: dict):
             return result
         else:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail={"error": result.get("error")})
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message={"error": result.get("error",
+            status_code=404
+        )})
             else:
-                raise HTTPException(status_code=500, detail={"error": result.get("error")})
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": result.get("error",
+            status_code=500
+        )})
 
     except HTTPException:
         raise
@@ -173,7 +198,12 @@ async def update_knowledge_item(source_id: str, updates: dict):
         safe_logfire_error(
             f"Failed to update knowledge item | error={str(e)} | source_id={source_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.delete("/knowledge-items/{source_id}")
@@ -222,7 +252,12 @@ async def delete_knowledge_item(source_id: str):
         safe_logfire_error(
             f"Failed to delete knowledge item | error={str(e)} | source_id={source_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/knowledge-items/{source_id}/code-examples")
@@ -255,7 +290,12 @@ async def get_knowledge_item_code_examples(source_id: str):
         safe_logfire_error(
             f"Failed to fetch code examples | error={str(e)} | source_id={source_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/knowledge-items/{source_id}/refresh")
@@ -364,7 +404,12 @@ async def refresh_knowledge_item(source_id: str):
         safe_logfire_error(
             f"Failed to refresh knowledge item | error={str(e)} | source_id={source_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/knowledge-items/crawl")
@@ -372,11 +417,21 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
     """Crawl a URL and add it to the knowledge base with progress tracking."""
     # Validate URL
     if not request.url:
-        raise HTTPException(status_code=422, detail="URL is required")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="URL is required",
+            status_code=422
+        )
 
     # Basic URL validation
     if not request.url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=422, detail="URL must start with http:// or https://")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="URL must start with http:// or https://",
+            status_code=422
+        )
 
     try:
         safe_logfire_info(
@@ -414,7 +469,12 @@ async def crawl_knowledge_item(request: KnowledgeItemRequest):
         return response_data
     except Exception as e:
         safe_logfire_error(f"Failed to start crawl | error={str(e)} | url={str(request.url)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 async def _perform_crawl_with_progress(progress_id: str, request: KnowledgeItemRequest):
@@ -571,7 +631,12 @@ async def upload_document(
         safe_logfire_error(
             f"Failed to start document upload | error={str(e)} | filename={file.filename} | error_type={type(e).__name__}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 async def _perform_upload_with_progress(
@@ -714,10 +779,20 @@ async def search_knowledge_items(request: RagQueryRequest):
     """Search knowledge items - alias for RAG query."""
     # Validate query
     if not request.query:
-        raise HTTPException(status_code=422, detail="Query is required")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="Query is required",
+            status_code=422
+        )
 
     if not request.query.strip():
-        raise HTTPException(status_code=422, detail="Query cannot be empty")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="Query cannot be empty",
+            status_code=422
+        )
 
     # Delegate to the RAG query handler
     return await perform_rag_query(request)
@@ -728,10 +803,20 @@ async def perform_rag_query(request: RagQueryRequest):
     """Perform a RAG query on the knowledge base using service layer."""
     # Validate query
     if not request.query:
-        raise HTTPException(status_code=422, detail="Query is required")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="Query is required",
+            status_code=422
+        )
 
     if not request.query.strip():
-        raise HTTPException(status_code=422, detail="Query cannot be empty")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="Query cannot be empty",
+            status_code=422
+        )
 
     try:
         # Use RAGService for RAG query
@@ -754,7 +839,12 @@ async def perform_rag_query(request: RagQueryRequest):
         safe_logfire_error(
             f"RAG query failed | error={str(e)} | query={request.query[:50]} | source={request.source}"
         )
-        raise HTTPException(status_code=500, detail={"error": f"RAG query failed: {str(e)}"})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": f"RAG query failed: {str(e,
+            status_code=500
+        )}"})
 
 
 @router.post("/rag/code-examples")
@@ -815,7 +905,12 @@ async def get_available_sources():
         return result
     except Exception as e:
         safe_logfire_error(f"Failed to get available sources | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.delete("/sources/{source_id}")
@@ -850,7 +945,12 @@ async def delete_source(source_id: str):
         raise
     except Exception as e:
         safe_logfire_error(f"Failed to delete source | error={str(e)} | source_id={source_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 # WebSocket Endpoints
@@ -866,7 +966,12 @@ async def get_database_metrics():
         return metrics
     except Exception as e:
         safe_logfire_error(f"Failed to get database metrics | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/health")
@@ -892,14 +997,24 @@ async def get_crawl_task_status(task_id: str):
         status = await task_manager.get_task_status(task_id)
 
         if "error" in status and status["error"] == "Task not found":
-            raise HTTPException(status_code=404, detail={"error": "Task not found"})
+            return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message={"error": "Task not found"},
+            status_code=404
+        )
 
         return status
     except HTTPException:
         raise
     except Exception as e:
         safe_logfire_error(f"Failed to get task status | error={str(e)} | task_id={task_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/knowledge-items/stop/{progress_id}")
@@ -965,4 +1080,9 @@ async def stop_crawl_task(progress_id: str):
         safe_logfire_error(
             f"Failed to stop crawl task | error={str(e)} | progress_id={progress_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})

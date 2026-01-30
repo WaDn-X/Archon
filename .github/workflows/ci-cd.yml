@@ -14,10 +14,53 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Port Management and Environment Setup
+  port-setup:
+    name: Port Management & Environment Setup
+    runs-on: ubuntu-latest
+    outputs:
+      port-config: ${{ steps.port-config.outputs.config }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run port scanner and generate configuration
+        id: port-config
+        run: |
+          cd python/src
+          python -c "
+          from utils.port_manager import port_manager
+          import json
+          import os
+
+          # Check and resolve port conflicts
+          allocations = port_manager.check_and_resolve_conflicts(auto_resolve=True)
+
+          # Save configuration for other jobs
+          config_file = '.zippy-archon-ports.json'
+          port_manager.scanner.save_port_configuration(allocations, f'../../{config_file}')
+
+          # Output configuration for other jobs
+          config_json = json.dumps({k: v.allocated_port for k, v in allocations.items()})
+          print(f'::set-output name=config::{config_json}')
+          "
+
+      - name: Upload port configuration
+        uses: actions/upload-artifact@v3
+        with:
+          name: port-configuration
+          path: .zippy-archon-ports.json
+
   # Security and Quality Checks
   security-scan:
     name: Security & Quality Scan
     runs-on: ubuntu-latest
+    needs: port-setup
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -59,6 +102,7 @@ jobs:
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
+    needs: port-setup
     services:
       redis:
         image: redis:7-alpine
@@ -73,6 +117,31 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Download port configuration
+        uses: actions/download-artifact@v3
+        with:
+          name: port-configuration
+
+      - name: Load port configuration
+        run: |
+          if [ -f ".zippy-archon-ports.json" ]; then
+            echo "Loading port configuration..."
+            python3 -c "
+            import json
+            import os
+
+            with open('.zippy-archon-ports.json', 'r') as f:
+                config = json.load(f)
+
+            allocations = config.get('allocations', {})
+            for env_var, allocation in allocations.items():
+                port = allocation.get('allocated_port')
+                if port:
+                    os.environ[env_var] = str(port)
+                    print(f'export {env_var}={port}')
+            "
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -136,7 +205,7 @@ jobs:
       - name: Run frontend linting
         run: |
           cd archon-ui-main
-          npm run lint || true
+          npm run lint
 
       - name: Run frontend tests
         run: |
@@ -266,19 +335,19 @@ jobs:
 
       - name: Check code formatting with Black
         run: |
-          black --check --diff python/src/ Scripts/ || true
+          black --check --diff python/src/ Scripts/
 
       - name: Check import sorting with isort
         run: |
-          isort --check-only --diff python/src/ Scripts/ || true
+          isort --check-only --diff python/src/ Scripts/
 
       - name: Run flake8 linting
         run: |
-          flake8 python/src/ Scripts/ --max-line-length=100 --extend-ignore=E203,W503 || true
+          flake8 python/src/ Scripts/ --max-line-length=100 --extend-ignore=E203,W503
 
       - name: Run mypy type checking
         run: |
-          mypy python/src/server/ --ignore-missing-imports || true
+          mypy python/src/server/ --ignore-missing-imports
 
   # Build and Test Docker Images
   docker-build:
@@ -357,9 +426,45 @@ jobs:
 
       - name: Run performance tests
         run: |
-          # Basic load test - can be expanded
-          echo "Performance testing framework ready"
-          # locust -f performance_tests.py --headless --users 10 --spawn-rate 1 --run-time 30s
+          # Install locust for performance testing
+          pip install locust
+
+          # Create basic performance test file
+          cat > performance_test.py << 'EOF'
+from locust import HttpUser, task, between
+import os
+
+class APIPerformanceTest(HttpUser):
+    wait_time = between(1, 3)
+
+    @task
+    def test_health_endpoint(self):
+        response = self.client.get("/health")
+        if response.status_code != 200:
+            response.failure(f"Health check failed with status {response.status_code}")
+
+    @task(3)
+    def test_api_root(self):
+        response = self.client.get("/")
+        if response.status_code != 200:
+            response.failure(f"API root failed with status {response.status_code}")
+
+    @task(2)
+    def test_docs_endpoint(self):
+        response = self.client.get("/docs")
+        if response.status_code != 200:
+            response.failure(f"Docs endpoint failed with status {response.status_code}")
+EOF
+
+          # Run performance test
+          locust -f performance_test.py --headless --users 10 --spawn-rate 2 --run-time 30s --html=performance-report.html || true
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: performance-report
+          path: performance-report.html
 
   # Deployment to Staging
   deploy-staging:
@@ -374,9 +479,31 @@ jobs:
 
       - name: Deploy to staging environment
         run: |
-          echo "Deploying to staging environment..."
-          # Add actual deployment commands here
-          # Example: kubectl apply -f k8s/staging/
+          echo "🚀 Starting deployment to staging environment..."
+
+          # Set up Docker environment
+          echo "Setting up Docker environment..."
+          docker --version
+
+          # Pull latest images
+          echo "Pulling latest container images..."
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-server || echo "Server image not found, will build locally"
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}-ui || echo "UI image not found, will build locally"
+
+          # Start services with docker-compose for staging
+          echo "Starting staging environment with Docker Compose..."
+          docker-compose -f docker-compose.staging.yml up -d --build
+
+          # Wait for services to be healthy
+          echo "Waiting for services to become healthy..."
+          sleep 30
+
+          # Health check
+          echo "Running health checks..."
+          curl -f http://localhost:8181/health || (echo "❌ Health check failed" && exit 1)
+          curl -f http://localhost:3737 || (echo "❌ Frontend health check failed" && exit 1)
+
+          echo "✅ Staging deployment completed successfully!"
 
   # Results Summary
   test-results:
@@ -418,15 +545,34 @@ jobs:
           name: test-summary
           path: test-summary.md
 
+      - name: Upload comprehensive test reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: comprehensive-test-reports
+          path: |
+            **/coverage/**
+            **/htmlcov/**
+            **/performance-report.html
+            **/security-results.json
+
       - name: Notify on failure
         if: failure()
-        run: |
-          echo "❌ Some tests failed. Check the detailed logs above."
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "❌ Zippy-Archon CI/CD Pipeline Failed!\n\n*Job:* ${{ github.job }}\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Triggered by:* ${{ github.event_name }}\n\n🔍 Check the detailed logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Notify on success
         if: success()
-        run: |
-          echo "✅ All tests passed successfully!"
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: "✅ Zippy-Archon CI/CD Pipeline Completed Successfully!\n\n*Branch:* ${{ github.ref }}\n*Commit:* ${{ github.sha }}\n*Duration:* ${{ github.event.head_commit.timestamp }}\n\n🚀 Ready for deployment!"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   # Final deployment decision
   deployment-gate:

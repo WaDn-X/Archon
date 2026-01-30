@@ -12,13 +12,14 @@ import asyncio
 import secrets
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 # Removed direct logging import - using unified config
 # Set up standard logger for background tasks
 from ..config.logfire_config import get_logger, logfire
 from ..utils import get_supabase_client
+from ..services.error_service import error_service
 
 logger = get_logger(__name__)
 
@@ -74,7 +75,7 @@ class CreateTaskRequest(BaseModel):
 
 
 @router.get("/projects")
-async def list_projects():
+async def list_projects(request: Request):
     """List all projects."""
     try:
         logfire.info("Listing all projects")
@@ -84,7 +85,12 @@ async def list_projects():
         success, result = project_service.list_projects()
 
         if not success:
-            raise HTTPException(status_code=500, detail=result)
+            return error_service.create_error_response(
+                request=request,
+                error_code="DATABASE_ERROR",
+                message="Failed to retrieve projects from database",
+                details={"service_error": result}
+            )
 
         # Use SourceLinkingService to format projects with sources
         source_service = SourceLinkingService()
@@ -94,11 +100,14 @@ async def list_projects():
 
         return formatted_projects
 
-    except HTTPException:
-        raise
     except Exception as e:
         logfire.error(f"Failed to list projects | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message="Failed to list projects",
+            details={"error": str(e)}
+        )
 
 
 @router.post("/projects")
@@ -106,10 +115,20 @@ async def create_project(request: CreateProjectRequest):
     """Create a new project with streaming progress."""
     # Validate title
     if not request.title:
-        raise HTTPException(status_code=422, detail="Title is required")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="Title is required",
+            status_code=422
+        )
 
     if not request.title.strip():
-        raise HTTPException(status_code=422, detail="Title cannot be empty")
+        return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message="Title cannot be empty",
+            status_code=422
+        )
 
     try:
         logfire.info(
@@ -146,7 +165,12 @@ async def create_project(request: CreateProjectRequest):
 
     except Exception as e:
         logfire.error(f"Failed to start project creation | error={str(e)} | title={request.title}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 async def _create_project_with_ai(progress_id: str, request: CreateProjectRequest):
@@ -266,9 +290,19 @@ async def get_project(project_id: str):
         if not success:
             if "not found" in result.get("error", "").lower():
                 logfire.warning(f"Project not found | project_id={project_id}")
-                raise HTTPException(status_code=404, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result,
+            status_code=404
+        )
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         project = result["project"]
 
@@ -290,7 +324,12 @@ async def get_project(project_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to get project | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.put("/projects/{project_id}")
@@ -367,7 +406,12 @@ async def update_project(project_id: str, request: UpdateProjectRequest):
                     status_code=404, detail={"error": f"Project with ID {project_id} not found"}
                 )
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         project = result["project"]
 
@@ -404,7 +448,12 @@ async def update_project(project_id: str, request: UpdateProjectRequest):
         raise
     except Exception as e:
         logfire.error(f"Project update failed | project_id={project_id} | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.delete("/projects/{project_id}")
@@ -419,9 +468,19 @@ async def delete_project(project_id: str):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result,
+            status_code=404
+        )
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         # Broadcast project list update to Socket.IO clients
         await broadcast_project_update()
@@ -439,7 +498,12 @@ async def delete_project(project_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to delete project | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/projects/{project_id}/features")
@@ -455,9 +519,19 @@ async def get_project_features(project_id: str):
         if not success:
             if "not found" in result.get("error", "").lower():
                 logfire.warning(f"Project not found for features | project_id={project_id}")
-                raise HTTPException(status_code=404, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result,
+            status_code=404
+        )
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(
             f"Project features retrieved | project_id={project_id} | feature_count={result.get('count', 0)}"
@@ -469,7 +543,12 @@ async def get_project_features(project_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to get project features | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/projects/{project_id}/tasks")
@@ -488,7 +567,12 @@ async def list_project_tasks(project_id: str, include_archived: bool = False):
         )
 
         if not success:
-            raise HTTPException(status_code=500, detail=result)
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         tasks = result.get("tasks", [])
 
@@ -511,7 +595,12 @@ async def list_project_tasks(project_id: str, include_archived: bool = False):
         raise
     except Exception as e:
         logfire.error(f"Failed to list project tasks | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 # Remove the complex /tasks endpoint - it's not needed and breaks things
@@ -533,7 +622,12 @@ async def create_task(request: CreateTaskRequest):
         )
 
         if not success:
-            raise HTTPException(status_code=400, detail=result)
+            return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message=result,
+            status_code=400
+        )
 
         created_task = result["task"]
 
@@ -547,7 +641,12 @@ async def create_task(request: CreateTaskRequest):
         raise
     except Exception as e:
         logfire.error(f"Failed to create task | error={str(e)} | project_id={request.project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/tasks")
@@ -574,7 +673,12 @@ async def list_tasks(
         )
 
         if not success:
-            raise HTTPException(status_code=500, detail=result)
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         tasks = result.get("tasks", [])
 
@@ -606,7 +710,12 @@ async def list_tasks(
         raise
     except Exception as e:
         logfire.error(f"Failed to list tasks | error={str(e)}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/tasks/{task_id}")
@@ -619,9 +728,19 @@ async def get_task(task_id: str):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         task = result["task"]
 
@@ -635,7 +754,12 @@ async def get_task(task_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to get task | error={str(e)} | task_id={task_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 class UpdateTaskRequest(BaseModel):
@@ -700,9 +824,19 @@ async def update_task(task_id: str, request: UpdateTaskRequest):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         updated_task = result["task"]
 
@@ -716,7 +850,12 @@ async def update_task(task_id: str, request: UpdateTaskRequest):
         raise
     except Exception as e:
         logfire.error(f"Failed to update task | error={str(e)} | task_id={task_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.delete("/tasks/{task_id}")
@@ -729,11 +868,26 @@ async def delete_task(task_id: str):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             elif "already archived" in result.get("error", "").lower():
-                raise HTTPException(status_code=409, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="CONFLICT",
+            message=result.get("error",
+            status_code=409
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(f"Task archived successfully | task_id={task_id}")
 
@@ -743,7 +897,12 @@ async def delete_task(task_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to archive task | error={str(e)} | task_id={task_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 # WebSocket endpoints removed - use Socket.IO events instead
@@ -766,9 +925,19 @@ async def mcp_update_task_status_with_socketio(task_id: str, status: str):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=f"Task {task_id} not found",
+            status_code=404
+        )
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         updated_task = result["task"]
         project_id = updated_task["project_id"]
@@ -785,7 +954,12 @@ async def mcp_update_task_status_with_socketio(task_id: str, status: str):
         logfire.error(
             f"Failed to update task status with Socket.IO | error={str(e)} | task_id={task_id}"
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=str(e,
+            status_code=500
+        ))
 
 
 # Socket.IO Event Handlers moved to socketio_handlers.py
@@ -806,9 +980,19 @@ async def list_project_documents(project_id: str):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(
             f"Documents listed successfully | project_id={project_id} | count={result.get('total_count', 0)}"
@@ -820,7 +1004,12 @@ async def list_project_documents(project_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to list documents | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/projects/{project_id}/docs")
@@ -844,9 +1033,19 @@ async def create_project_document(project_id: str, request: CreateDocumentReques
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=400, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message=result,
+            status_code=400
+        )
 
         logfire.info(
             f"Document created successfully | project_id={project_id} | doc_id={result['document']['id']}"
@@ -858,7 +1057,12 @@ async def create_project_document(project_id: str, request: CreateDocumentReques
         raise
     except Exception as e:
         logfire.error(f"Failed to create document | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/projects/{project_id}/docs/{doc_id}")
@@ -873,9 +1077,19 @@ async def get_project_document(project_id: str, doc_id: str):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(f"Document retrieved successfully | project_id={project_id} | doc_id={doc_id}")
 
@@ -887,7 +1101,12 @@ async def get_project_document(project_id: str, doc_id: str):
         logfire.error(
             f"Failed to get document | error={str(e)} | project_id={project_id} | doc_id={doc_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.put("/projects/{project_id}/docs/{doc_id}")
@@ -913,9 +1132,19 @@ async def update_project_document(project_id: str, doc_id: str, request: UpdateD
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(f"Document updated successfully | project_id={project_id} | doc_id={doc_id}")
 
@@ -927,7 +1156,12 @@ async def update_project_document(project_id: str, doc_id: str, request: UpdateD
         logfire.error(
             f"Failed to update document | error={str(e)} | project_id={project_id} | doc_id={doc_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.delete("/projects/{project_id}/docs/{doc_id}")
@@ -942,9 +1176,19 @@ async def delete_project_document(project_id: str, doc_id: str):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(f"Document deleted successfully | project_id={project_id} | doc_id={doc_id}")
 
@@ -956,7 +1200,12 @@ async def delete_project_document(project_id: str, doc_id: str):
         logfire.error(
             f"Failed to delete document | error={str(e)} | project_id={project_id} | doc_id={doc_id}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 # ==================== VERSION MANAGEMENT ENDPOINTS ====================
@@ -976,9 +1225,19 @@ async def list_project_versions(project_id: str, field_name: str = None):
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(
             f"Versions listed successfully | project_id={project_id} | count={result.get('total_count', 0)}"
@@ -990,7 +1249,12 @@ async def list_project_versions(project_id: str, field_name: str = None):
         raise
     except Exception as e:
         logfire.error(f"Failed to list versions | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/projects/{project_id}/versions")
@@ -1015,9 +1279,19 @@ async def create_project_version(project_id: str, request: CreateVersionRequest)
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=400, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="VALIDATION_ERROR",
+            message=result,
+            status_code=400
+        )
 
         logfire.info(
             f"Version created successfully | project_id={project_id} | version_number={result['version_number']}"
@@ -1029,7 +1303,12 @@ async def create_project_version(project_id: str, request: CreateVersionRequest)
         raise
     except Exception as e:
         logfire.error(f"Failed to create version | error={str(e)} | project_id={project_id}")
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.get("/projects/{project_id}/versions/{field_name}/{version_number}")
@@ -1048,9 +1327,19 @@ async def get_project_version(project_id: str, field_name: str, version_number: 
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(
             f"Version retrieved successfully | project_id={project_id} | field_name={field_name} | version_number={version_number}"
@@ -1064,7 +1353,12 @@ async def get_project_version(project_id: str, field_name: str, version_number: 
         logfire.error(
             f"Failed to get version | error={str(e)} | project_id={project_id} | field_name={field_name} | version_number={version_number}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})
 
 
 @router.post("/projects/{project_id}/versions/{field_name}/{version_number}/restore")
@@ -1088,9 +1382,19 @@ async def restore_project_version(
 
         if not success:
             if "not found" in result.get("error", "").lower():
-                raise HTTPException(status_code=404, detail=result.get("error"))
+                return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message=result.get("error",
+            status_code=404
+        ))
             else:
-                raise HTTPException(status_code=500, detail=result)
+                return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=result,
+            status_code=500
+        )
 
         logfire.info(
             f"Version restored successfully | project_id={project_id} | field_name={field_name} | version_number={version_number}"
@@ -1107,4 +1411,9 @@ async def restore_project_version(
         logfire.error(
             f"Failed to restore version | error={str(e)} | project_id={project_id} | field_name={field_name} | version_number={version_number}"
         )
-        raise HTTPException(status_code=500, detail={"error": str(e)})
+        return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message={"error": str(e,
+            status_code=500
+        )})

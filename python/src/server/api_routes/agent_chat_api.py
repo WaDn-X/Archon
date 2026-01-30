@@ -64,7 +64,12 @@ async def create_session(request: CreateSessionRequest):
 async def get_session(session_id: str):
     """Get session information."""
     if session_id not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+        return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="Session not found",
+            status_code=404
+        )
     return sessions[session_id]
 
 
@@ -72,7 +77,12 @@ async def get_session(session_id: str):
 async def send_message(session_id: str, request: dict):
     """REST endpoint for sending messages (triggers Socket.IO event internally)."""
     if session_id not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
+        return error_service.create_error_response(
+            request=request,
+            error_code="NOT_FOUND",
+            message="Session not found",
+            status_code=404
+        )
 
     # Store user message
     user_msg = {

@@ -61,6 +61,18 @@ class TeamMember:
 
 
 @dataclass
+class WorkloadAnalysis:
+    """Analysis of team workload distribution."""
+    total_members: int
+    average_workload: float
+    workload_distribution: Dict[str, int]  # user_id -> task_count
+    overloaded_members: List[str]
+    underutilized_members: List[str]
+    capacity_utilization: Dict[str, float]
+    recommendations: List[str]
+
+
+@dataclass
 class Team:
     """Team information and configuration."""
     id: str
@@ -82,18 +94,6 @@ class TaskAssignment:
     estimated_hours: Optional[int] = None
     priority: str = "medium"
     reason: str = ""
-
-
-@dataclass
-class WorkloadAnalysis:
-    """Analysis of team workload distribution."""
-    total_members: int
-    average_workload: float
-    workload_distribution: Dict[str, int]  # user_id -> task_count
-    overloaded_members: List[str]
-    underutilized_members: List[str]
-    capacity_utilization: Dict[str, float]
-    recommendations: List[str]
 
 
 @dataclass

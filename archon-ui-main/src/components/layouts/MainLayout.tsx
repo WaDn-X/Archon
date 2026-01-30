@@ -170,25 +170,61 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   return <div className="relative min-h-screen bg-white dark:bg-black overflow-hidden">
       {/* Show backend startup error if backend failed to start */}
       {backendStartupFailed && <BackendStartupError />}
-      
+
       {/* Fixed full-page background grid that doesn't scroll */}
       <div className="fixed inset-0 neon-grid pointer-events-none z-0"></div>
-      {/* Floating Navigation */}
-      <div className="fixed left-6 top-1/2 -translate-y-1/2 z-50">
-        <SideNavigation />
-      </div>
-      {/* Main Content Area - no left margin to allow grid to extend full width */}
-      <div className="relative flex-1 pl-[100px] z-10">
-        <div className="container mx-auto px-8 relative">
-          <div className="min-h-screen pt-8 pb-16">{children}</div>
+
+      {/* Responsive Layout Container */}
+      <div className="flex min-h-screen">
+        {/* Desktop Sidebar Navigation - Hidden on mobile */}
+        <div className="hidden lg:block fixed left-6 top-1/2 -translate-y-1/2 z-50">
+          <SideNavigation />
+        </div>
+
+        {/* Mobile Navigation - Top bar */}
+        <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-black/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center space-x-3">
+              <img src="/logo-neon.svg" alt="Archon" className="w-8 h-8" />
+              <span className="font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Archon
+              </span>
+            </div>
+            <SideNavigation mobileMode={true} />
+          </div>
+        </div>
+
+        {/* Main Content Area - Responsive padding */}
+        <div className="flex-1 lg:pl-[100px] pt-16 lg:pt-8 z-10">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative">
+            <div className="min-h-screen pb-16 lg:pb-20">{children}</div>
+          </div>
         </div>
       </div>
-      {/* Floating Chat Button - Only visible when chat is closed */}
+
+      {/* Mobile Chat Button - Positioned for touch */}
       {!isChatOpen && (
-        <div className="fixed bottom-6 right-6 z-50 group">
-          <button 
+        <div className="lg:hidden fixed bottom-20 right-4 z-50 group">
+          <button
             disabled
-            className="w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-md bg-gradient-to-b from-gray-100/80 to-gray-50/60 dark:from-gray-700/30 dark:to-gray-800/30 shadow-[0_0_10px_rgba(156,163,175,0.3)] dark:shadow-[0_0_10px_rgba(156,163,175,0.3)] cursor-not-allowed opacity-60 overflow-hidden border border-gray-300 dark:border-gray-600" 
+            className="w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md bg-gradient-to-b from-gray-100/80 to-gray-50/60 dark:from-gray-700/30 dark:to-gray-800/30 shadow-[0_0_10px_rgba(156,163,175,0.3)] dark:shadow-[0_0_10px_rgba(156,163,175,0.3)] cursor-not-allowed opacity-60 overflow-hidden border border-gray-300 dark:border-gray-600"
+            aria-label="Knowledge Assistant - Coming Soon">
+            <img src="/logo-neon.png" alt="Archon" className="w-6 h-6 grayscale opacity-50" />
+          </button>
+          {/* Mobile-optimized tooltip */}
+          <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-800 dark:bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            Coming Soon
+            <div className="absolute bottom-0 right-3 transform translate-y-1/2 rotate-45 w-1.5 h-1.5 bg-gray-800 dark:bg-gray-900"></div>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Chat Button - Hidden on mobile */}
+      {!isChatOpen && (
+        <div className="hidden lg:block fixed bottom-6 right-6 z-50 group">
+          <button
+            disabled
+            className="w-14 h-14 rounded-full flex items-center justify-center backdrop-blur-md bg-gradient-to-b from-gray-100/80 to-gray-50/60 dark:from-gray-700/30 dark:to-gray-800/30 shadow-[0_0_10px_rgba(156,163,175,0.3)] dark:shadow-[0_0_10px_rgba(156,163,175,0.3)] cursor-not-allowed opacity-60 overflow-hidden border border-gray-300 dark:border-gray-600"
             aria-label="Knowledge Assistant - Coming Soon">
             <img src="/logo-neon.png" alt="Archon" className="w-7 h-7 grayscale opacity-50" />
           </button>

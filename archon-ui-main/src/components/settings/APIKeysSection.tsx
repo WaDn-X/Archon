@@ -49,6 +49,22 @@ export const APIKeysSection = () => {
         const key = cred.key.toUpperCase();
         return key.includes('_KEY') || key.includes('_API') || key.includes('API_');
       });
+
+      // Add XAI API key if it doesn't exist (for user to configure)
+      const hasXaiKey = apiKeys.some(cred => cred.key === 'XAI_API_KEY');
+      if (!hasXaiKey) {
+        apiKeys.push({
+          key: 'XAI_API_KEY',
+          value: '',
+          description: 'XAI (Grok) API Key',
+          originalValue: '',
+          originalKey: 'XAI_API_KEY',
+          hasChanges: false,
+          is_encrypted: false,
+          showValue: false,
+          isNew: true
+        });
+      }
       
       // Convert to UI format
       const uiCredentials = apiKeys.map(cred => ({
@@ -137,6 +153,20 @@ export const APIKeysSection = () => {
           showToast('Key name cannot be empty', 'error');
           hasErrors = true;
           continue;
+        }
+
+        // XAI API key validation
+        if (cred.key === 'XAI_API_KEY') {
+          if (!cred.value.startsWith('xai-')) {
+            showToast('XAI API key should start with "xai-"', 'error');
+            hasErrors = true;
+            continue;
+          }
+          if (cred.value.length < 20) {
+            showToast('XAI API key appears to be too short', 'error');
+            hasErrors = true;
+            continue;
+          }
         }
         
         try {

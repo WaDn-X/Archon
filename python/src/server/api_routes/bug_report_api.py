@@ -104,10 +104,20 @@ class GitHubService:
 
         except httpx.TimeoutException:
             logger.error("GitHub API request timed out")
-            raise HTTPException(status_code=500, detail="GitHub API request timed out")
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message="GitHub API request timed out",
+            status_code=500
+        )
         except Exception as e:
             logger.error(f"Unexpected error creating GitHub issue: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to create GitHub issue: {str(e)}")
+            return error_service.create_error_response(
+            request=request,
+            error_code="INTERNAL_ERROR",
+            message=f"Failed to create GitHub issue: {str(e,
+            status_code=500
+        )}")
 
     def _format_issue_body(self, bug_report: BugReportRequest) -> str:
         """Format the bug report as a GitHub issue body."""
