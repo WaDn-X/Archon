@@ -3,13 +3,19 @@
 </p>
 
 <p align="center">
+   <a href="https://trendshift.io/repositories/13964" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13964" alt="coleam00%2FArchon | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+</p>
+
+<p align="center">
   <em>Power up your AI coding assistants with your own custom knowledge base and task management as an MCP server</em>
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
+  <a href="#upgrading">Upgrading</a> •
   <a href="#whats-included">What's Included</a> •
-  <a href="#architecture">Architecture</a>
+  <a href="#architecture">Architecture</a> •
+  <a href="#troubleshooting">Troubleshooting</a>
 </p>
 
 ---
@@ -40,6 +46,16 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
 
 ## Quick Start
 
+<p align="center">
+  <a href="https://youtu.be/DMXyDpnzNpY">
+    <img src="https://img.youtube.com/vi/DMXyDpnzNpY/maxresdefault.jpg" alt="Archon Setup Tutorial" width="640" />
+  </a>
+  <br/>
+  <em>📺 Click to watch the setup tutorial on YouTube</em>
+  <br/>
+  <a href="./archon-example-workflow">-> Example AI coding workflow in the video <-</a>
+</p>
+
 ### Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
@@ -52,11 +68,13 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
 
 1. **Clone Repository**:
    ```bash
-   git clone https://github.com/coleam00/archon.git
+   git clone -b stable https://github.com/coleam00/archon.git
    ```
    ```bash
    cd archon
    ```
+   
+   **Note:** The `stable` branch is recommended for using Archon. If you want to contribute or try the latest features, use the `main` branch with `git clone https://github.com/coleam00/archon.git`
 2. **Environment Configuration**:
 
    ```bash
@@ -66,9 +84,9 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
    # SUPABASE_SERVICE_KEY=your-service-key-here
    ```
 
-   NOTE: Supabase introduced a new type of service key but use the legacy one (the longer one).
-
-   OPTIONAL: If you want to enable the reranking RAG strategy, uncomment lines 20-22 in `python\requirements.server.txt`. This will significantly increase the size of the Archon Server container which is why it's off by default.
+   IMPORTANT NOTES:
+   - For cloud Supabase: they recently introduced a new type of service role key but use the legacy one (the longer one).
+   - For local Supabase: set SUPABASE_URL to http://host.docker.internal:8000 (unless you have an IP address set up).
 
 3. **Database Setup**: In your [Supabase project](https://supabase.com/dashboard) SQL Editor, copy, paste, and execute the contents of `migration/complete_setup.sql`
 
@@ -77,67 +95,33 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
    **Full Docker Mode (Recommended for Normal Archon Usage)**
 
    ```bash
-   docker compose --profile full up --build -d
-   # or
-   make dev-docker # (Alternative: Requires make installed )
+   docker compose up --build -d
    ```
 
    This starts all core microservices in Docker:
    - **Server**: Core API and business logic (Port: 8181)
    - **MCP Server**: Protocol interface for AI clients (Port: 8051)
-   - **Agents (coming soon!)**: AI operations and streaming (Port: 8052)
    - **UI**: Web interface (Port: 3737)
 
    Ports are configurable in your .env as well!
 
 5. **Configure API Keys**:
    - Open http://localhost:3737
-   - Go to **Settings** → Select your LLM/embedding provider and set the API key (OpenAI is default)
-   - Test by uploading a document or crawling a website
+   - You'll automatically be brought through an onboarding flow to set your API key (OpenAI is default)
 
-### 🚀 Quick Command Reference
+## ⚡ Quick Test
 
-| Command           | Description                                             |
-| ----------------- | ------------------------------------------------------- |
-| `make dev`        | Start hybrid dev (backend in Docker, frontend local) ⭐ |
-| `make dev-docker` | Everything in Docker                                    |
-| `make stop`       | Stop all services                                       |
-| `make test`       | Run all tests                                           |
-| `make lint`       | Run linters                                             |
-| `make install`    | Install dependencies                                    |
-| `make check`      | Check environment setup                                 |
-| `make clean`      | Remove containers and volumes (with confirmation)       |
+Once everything is running:
 
-## 🔄 Database Reset (Start Fresh if Needed)
+1. **Test Web Crawling**: Go to http://localhost:3737 → Knowledge Base → "Crawl Website" → Enter a doc URL (such as https://ai.pydantic.dev/llms-full.txt)
+2. **Test Document Upload**: Knowledge Base → Upload a PDF
+3. **Test Projects**: Projects → Create a new project and add tasks
+4. **Integrate with your AI coding assistant**: MCP Dashboard → Copy connection config for your AI coding assistant 
 
-If you need to completely reset your database and start fresh:
+## Installing Make
 
 <details>
-<summary>⚠️ <strong>Reset Database - This will delete ALL data for Archon!</strong></summary>
-
-1. **Run Reset Script**: In your Supabase SQL Editor, run the contents of `migration/RESET_DB.sql`
-
-   ⚠️ WARNING: This will delete all Archon specific tables and data! Nothing else will be touched in your DB though.
-
-2. **Rebuild Database**: After reset, run `migration/complete_setup.sql` to create all the tables again.
-
-3. **Restart Services**:
-
-   ```bash
-   docker compose --profile full up -d
-   ```
-
-4. **Reconfigure**:
-   - Select your LLM/embedding provider and set the API key again
-   - Re-upload any documents or re-crawl websites
-
-The reset script safely removes all tables, functions, triggers, and policies with proper dependency handling.
-
-</details>
-
-## 🛠️ Installing Make (OPTIONAL)
-
-Make is required for the local development workflow. Installation varies by platform:
+<summary><strong>🛠️ Make installation (OPTIONAL - For Dev Workflows)</strong></summary>
 
 ### Windows
 
@@ -170,14 +154,51 @@ sudo apt-get install make
 sudo yum install make
 ```
 
-## ⚡ Quick Test
+</details>
 
-Once everything is running:
+<details>
+<summary><strong>🚀 Quick Command Reference for Make</strong></summary>
+<br/>
 
-1. **Test Web Crawling**: Go to http://localhost:3737 → Knowledge Base → "Crawl Website" → Enter a doc URL (such as https://ai.pydantic.dev/llms-full.txt)
-2. **Test Document Upload**: Knowledge Base → Upload a PDF
-3. **Test Projects**: Projects → Create a new project and add tasks
-4. **Integrate with your AI coding assistant**: MCP Dashboard → Copy connection config for your AI coding assistant
+| Command           | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `make dev`        | Start hybrid dev (backend in Docker, frontend local) ⭐ |
+| `make dev-docker` | Everything in Docker                                    |
+| `make stop`       | Stop all services                                       |
+| `make test`       | Run all tests                                           |
+| `make lint`       | Run linters                                             |
+| `make install`    | Install dependencies                                    |
+| `make check`      | Check environment setup                                 |
+| `make clean`      | Remove containers and volumes (with confirmation)       |
+
+</details>
+
+## 🔄 Database Reset (Start Fresh if Needed)
+
+If you need to completely reset your database and start fresh:
+
+<details>
+<summary>⚠️ <strong>Reset Database - This will delete ALL data for Archon!</strong></summary>
+
+1. **Run Reset Script**: In your Supabase SQL Editor, run the contents of `migration/RESET_DB.sql`
+
+   ⚠️ WARNING: This will delete all Archon specific tables and data! Nothing else will be touched in your DB though.
+
+2. **Rebuild Database**: After reset, run `migration/complete_setup.sql` to create all the tables again.
+
+3. **Restart Services**:
+
+   ```bash
+   docker compose --profile full up -d
+   ```
+
+4. **Reconfigure**:
+   - Select your LLM/embedding provider and set the API key again
+   - Re-upload any documents or re-crawl websites
+
+The reset script safely removes all tables, functions, triggers, and policies with proper dependency handling.
+
+</details>
 
 ## 📚 Documentation
 
@@ -188,7 +209,29 @@ Once everything is running:
 | **Web Interface**  | archon-ui      | http://localhost:3737 | Main dashboard and controls       |
 | **API Service**    | archon-server  | http://localhost:8181 | Web crawling, document processing |
 | **MCP Server**     | archon-mcp     | http://localhost:8051 | Model Context Protocol interface  |
-| **Agents Service** | archon-agents  | http://localhost:8052 | AI/ML operations, reranking       |
+| **Agents Service** | archon-agents  | http://localhost:8052 | AI/ML operations, reranking       |  
+
+## Upgrading
+
+To upgrade Archon to the latest version:
+
+1. **Pull latest changes**:
+   ```bash
+   git pull
+   ```
+
+2. **Rebuild and restart containers**:
+   ```bash
+   docker compose up -d --build
+   ```
+   This rebuilds containers with the latest code and restarts all services.
+
+3. **Check for database migrations**:
+   - Open the Archon settings in your browser: [http://localhost:3737/settings](http://localhost:3737/settings)
+   - Navigate to the **Database Migrations** section
+   - If there are pending migrations, the UI will display them with clear instructions
+   - Click on each migration to view and copy the SQL
+   - Run the SQL scripts in your Supabase SQL editor in the order shown
 
 ## What's Included
 
@@ -203,7 +246,7 @@ Once everything is running:
 ### 🤖 AI Integration
 
 - **Model Context Protocol (MCP)**: Connect any MCP-compatible client (Claude Code, Cursor, even non-AI coding assistants like Claude Desktop)
-- **10 MCP Tools**: Comprehensive yet simple set of tools for RAG queries, task management, and project operations
+- **MCP Tools**: Comprehensive yet simple set of tools for RAG queries, task management, and project operations
 - **Multi-LLM Support**: Works with OpenAI, Ollama, and Google Gemini models
 - **RAG Strategies**: Hybrid search, contextual embeddings, and result reranking for optimal AI responses
 - **Real-time Streaming**: Live responses from AI agents with progress tracking
@@ -254,7 +297,7 @@ Archon uses true microservices architecture with clear separation of concerns:
 | -------------- | -------------------- | ---------------------------- | ------------------------------------------------------------------ |
 | **Frontend**   | `archon-ui-main/`    | Web interface and dashboard  | React, TypeScript, TailwindCSS, Socket.IO client                   |
 | **Server**     | `python/src/server/` | Core business logic and APIs | FastAPI, service layer, Socket.IO broadcasts, all ML/AI operations |
-| **MCP Server** | `python/src/mcp/`    | MCP protocol interface       | Lightweight HTTP wrapper, 10 MCP tools, session management         |
+| **MCP Server** | `python/src/mcp/`    | MCP protocol interface       | Lightweight HTTP wrapper, MCP tools, session management         |
 | **Agents**     | `python/src/agents/` | PydanticAI agent hosting     | Document and RAG agents, streaming responses                       |
 
 ### Communication Patterns
@@ -395,7 +438,7 @@ docker compose logs -f archon-ui     # Frontend
 
 **Note**: The backend services are configured with `--reload` flag in their uvicorn commands and have source code mounted as volumes for automatic hot reloading when you make changes.
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Common Issues and Solutions
 
