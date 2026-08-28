@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Path
 
 from ..config.logfire_config import logfire
 from ..services.credential_service import credential_service
-# Provider validation - simplified inline version
+from ..services.vertex_ai_service import check_vertex_ai_connection
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
 
@@ -95,6 +95,8 @@ PROVIDER_TESTERS = {
     "grok": test_grok_connection,
 }
 
+ALLOWED_PROVIDERS = frozenset({"openai", "ollama", "google", "openrouter", "anthropic", "grok", "vertexai"})
+
 
 @router.get("/{provider}/status")
 async def get_provider_status(
@@ -107,17 +109,19 @@ async def get_provider_status(
 ):
     """Test provider connectivity using server-side API key (secure)"""
     try:
-        # Basic provider validation
-        allowed_providers = {"openai", "ollama", "google", "openrouter", "anthropic", "grok"}
-        if provider not in allowed_providers:
+        if provider not in ALLOWED_PROVIDERS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid provider '{provider}'. Allowed providers: {sorted(allowed_providers)}"
+                detail=f"Invalid provider '{provider}'. Allowed providers: {sorted(ALLOWED_PROVIDERS)}"
             )
 
-        # Basic sanitization for logging
-        safe_provider = provider[:20]  # Limit length
+        safe_provider = provider[:20]
         logfire.info(f"Testing {safe_provider} connectivity server-side")
+
+        if provider == "vertexai":
+            result = await check_vertex_ai_connection()
+            logfire.info(f"{safe_provider} connectivity test result: {result.get('ok')}")
+            return result
 
         if provider not in PROVIDER_TESTERS:
             raise HTTPException(
@@ -133,7 +137,6 @@ async def get_provider_status(
             logfire.info(f"No API key configured for {safe_provider}")
             return {"ok": False, "reason": "no_key"}
 
-        # Test connectivity using server-side key
         tester = PROVIDER_TESTERS[provider]
         is_connected = await tester(api_key)
 
@@ -141,14 +144,12 @@ async def get_provider_status(
         return {
             "ok": is_connected,
             "reason": "connected" if is_connected else "connection_failed",
-            "provider": provider  # Echo back validated provider name
+            "provider": provider
         }
 
     except HTTPException:
-        # Re-raise HTTP exceptions (they're already properly formatted)
         raise
     except Exception as e:
-        # Basic error sanitization for logging
-        safe_error = str(e)[:100]  # Limit length
+        safe_error = str(e)[:100]
         logfire.error(f"Error testing {provider[:20]} connectivity: {safe_error}")
         raise HTTPException(status_code=500, detail={"error": "Internal server error during connectivity test"})
