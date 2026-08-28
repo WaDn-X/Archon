@@ -291,6 +291,30 @@ When connected to Claude/Cursor/Windsurf, the following tools are available:
 - `archon:find_versions` - Find version history or get specific version
 - `archon:manage_version` - Manage versions with actions: "create", "restore"
 
+## Execute Allowlist (Plugins & Executors)
+
+Archon uses a small, local execute allowlist — **not** a third-party trust API or marketplace. Extra Python plugins and non-first-party sandbox executors must be explicitly allowlisted by **name** and **SHA-256** hash before they can load or run.
+
+- **Config file:** `python/src/server/config/plugin_allowlist.json` (override with `PLUGIN_ALLOWLIST_PATH`)
+- **Default:** empty `plugins` and `executors` arrays → zero extra plugins load
+- **Built-in MCP tools** (`rag_*`, `find_*`, `manage_*`) are first-party and do not need allowlist entries
+- **First-party executors** for agent work order sandboxes: `claude`, `git`, `gh`
+
+### Add an allowlisted plugin
+
+```bash
+cd python
+python -c "import hashlib, pathlib; p=pathlib.Path('src/plugins/my_plugin.py'); print(hashlib.sha256(p.read_bytes()).hexdigest())"
+```
+
+Add the entry to `plugin_allowlist.json`, set `"enabled": true`, and restart the MCP server. See `python/src/plugins/README.md` for details.
+
+### API
+
+- `GET /api/plugins/allowlist`
+- `PUT /api/plugins/allowlist`
+- `POST /api/plugins/allowlist/entries` (add/remove/enable/disable)
+
 ## Important Notes
 
 - Projects feature is optional - toggle in Settings UI

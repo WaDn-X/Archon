@@ -9,6 +9,9 @@ import shutil
 import time
 from pathlib import Path
 
+from src.allowlist.executors import validate_sandbox_command
+from src.allowlist.exceptions import ExecutorNotAllowedError
+
 from ..config import config
 from ..models import CommandExecutionResult, SandboxSetupError
 from ..utils.git_operations import get_current_branch
@@ -83,6 +86,19 @@ class GitBranchSandbox:
         """
         self._logger.info("command_execution_started", command=command)
         start_time = time.time()
+
+        try:
+            validate_sandbox_command(command)
+        except ExecutorNotAllowedError as exc:
+            self._logger.error("command_execution_denied", command=command, error=str(exc))
+            return CommandExecutionResult(
+                success=False,
+                stdout=None,
+                stderr=None,
+                exit_code=-1,
+                error_message=str(exc),
+                duration_seconds=time.time() - start_time,
+            )
 
         try:
             process = await asyncio.create_subprocess_shell(

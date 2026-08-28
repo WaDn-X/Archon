@@ -531,6 +531,27 @@ def register_modules():
         logger.error(f"✗ Failed to register feature tools: {e}")
         logger.error(traceback.format_exc())
 
+    # Allowlisted external MCP plugins (empty allowlist = zero extra plugins)
+    try:
+        from src.allowlist.loader import load_allowlisted_plugins_from_directory
+        from src.plugins import PLUGIN_DIR
+
+        def _register_plugin(module: object) -> None:
+            register_fn = getattr(module, "register_tools", None)
+            if callable(register_fn):
+                register_fn(mcp)
+
+        loaded = load_allowlisted_plugins_from_directory(PLUGIN_DIR, register_callback=_register_plugin)
+        modules_registered += len(loaded)
+        if loaded:
+            logger.info("✓ %d allowlisted plugin(s) registered", len(loaded))
+        else:
+            logger.info("No allowlisted MCP plugins loaded (allowlist empty or no matches)")
+    except Exception as e:
+        logger.error(f"✗ Failed to load allowlisted MCP plugins: {e}")
+        logger.error(traceback.format_exc())
+        raise
+
     logger.info(f"📦 Total modules registered: {modules_registered}")
 
     if modules_registered == 0:

@@ -65,7 +65,10 @@ async def test_git_branch_sandbox_execute_command_success():
         mock_process.returncode = 0
         mock_process.communicate = AsyncMock(return_value=(b"Command output", b""))
 
-        with patch("asyncio.create_subprocess_shell", return_value=mock_process):
+        with (
+            patch("src.agent_work_orders.sandbox_manager.git_branch_sandbox.validate_sandbox_command"),
+            patch("asyncio.create_subprocess_shell", return_value=mock_process),
+        ):
             result = await sandbox.execute_command("echo 'test'", timeout=10)
 
         assert result.success is True
@@ -88,7 +91,10 @@ async def test_git_branch_sandbox_execute_command_failure():
         mock_process.returncode = 1
         mock_process.communicate = AsyncMock(return_value=(b"", b"Command failed"))
 
-        with patch("asyncio.create_subprocess_shell", return_value=mock_process):
+        with (
+            patch("src.agent_work_orders.sandbox_manager.git_branch_sandbox.validate_sandbox_command"),
+            patch("asyncio.create_subprocess_shell", return_value=mock_process),
+        ):
             result = await sandbox.execute_command("false", timeout=10)
 
         assert result.success is False
@@ -119,12 +125,33 @@ async def test_git_branch_sandbox_execute_command_timeout():
 
         mock_process.communicate = mock_communicate
 
-        with patch("asyncio.create_subprocess_shell", return_value=mock_process):
+        with (
+            patch("src.agent_work_orders.sandbox_manager.git_branch_sandbox.validate_sandbox_command"),
+            patch("asyncio.create_subprocess_shell", return_value=mock_process),
+        ):
             result = await sandbox.execute_command("sleep 100", timeout=0.1)
 
         assert result.success is False
         assert result.exit_code == -1
         assert "timed out" in result.error_message.lower()
+
+
+@pytest.mark.asyncio
+async def test_git_branch_sandbox_execute_command_denied_without_allowlist():
+    """Test non-first-party commands are blocked when not allowlisted."""
+    with TemporaryDirectory() as tmpdir:
+        sandbox = GitBranchSandbox(
+            repository_url="https://github.com/owner/repo",
+            sandbox_identifier="sandbox-test",
+        )
+        sandbox.working_dir = tmpdir
+
+        result = await sandbox.execute_command("echo 'test'", timeout=10)
+
+        assert result.success is False
+        assert result.exit_code == -1
+        assert result.error_message is not None
+        assert "not allowlisted" in result.error_message.lower()
 
 
 @pytest.mark.asyncio
