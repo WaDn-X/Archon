@@ -19,6 +19,7 @@ from pydantic_ai import Agent, RunContext
 
 from .base_agent import ArchonDependencies, BaseAgent
 from .mcp_client import get_mcp_client
+from .supabase_schema import build_supabase_schema, find_supabase_source
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +120,11 @@ class DocumentAgent(BaseAgent[DocumentDependencies, DocumentOperation]):
 - "Create an ERD for the e-commerce system" → Use create_erd tool
 - "Design database schema for user management" → Use create_erd tool
 - "Generate SQL tables for the blog system" → Use create_erd tool
+- "Generate Supabase schema with RLS for auth" → Use generate_supabase_schema tool
+
+**📋 Plan Refinement:**
+- "Refine the project plan based on feedback" → Use refine_project_plan tool
+- "Update plan architecture section" → Use refine_project_plan tool
 
 **✅ Change Management:**
 - "Request approval for the API changes" → Use request_approval tool
@@ -594,6 +600,188 @@ class DocumentAgent(BaseAgent[DocumentDependencies, DocumentOperation]):
             except Exception as e:
                 logger.error(f"Error creating ERD: {e}")
                 return f"Error creating ERD: {str(e)}"
+
+        @agent.tool
+        async def generate_supabase_schema(
+            ctx: RunContext[DocumentDependencies],
+            system_name: str,
+            entity_descriptions: str,
+            focus_query: str = "row level security auth policies",
+        ) -> str:
+            """Generate Supabase PostgreSQL schema with RLS policies and auth notes using RAG."""
+            try:
+                mcp_client = await get_mcp_client()
+                sources_json = await mcp_client.get_available_sources()
+                sources_result = json.loads(sources_json)
+                sources = sources_result.get("sources", []) if sources_result.get("success") else []
+
+                supabase_source = find_supabase_source(sources)
+                source_filter = None
+                if supabase_source:
+                    source_filter = supabase_source.get("source_id") or supabase_source.get("id")
+
+                rag_query = focus_query
+                if supabase_source:
+                    rag_query = f"supabase {focus_query}"
+
+                rag_json = await mcp_client.perform_rag_query(
+                    query=rag_query,
+                    source=source_filter,
+                    match_count=5,
+                )
+                rag_result = json.loads(rag_json)
+                rag_snippets: list[str] = []
+                if rag_result.get("success"):
+                    for hit in rag_result.get("results", []):
+                        rag_snippets.append(hit.get("content", ""))
+
+                schema_content = build_supabase_schema(
+                    system_name=system_name,
+                    entity_descriptions=entity_descriptions,
+                    rag_snippets=rag_snippets,
+                    has_supabase_docs=supabase_source is not None,
+                )
+
+                blocks = self._convert_to_blocks(
+                    f"{system_name} - Supabase Schema",
+                    "technical_spec",
+                    "Supabase PostgreSQL schema with RLS and auth guidance.",
+                )
+                blocks.append(
+                    self._create_block(
+                        "heading_2",
+                        "SQL (tables + RLS)",
+                    )
+                )
+                blocks.append(
+                    self._create_block(
+                        "code",
+                        schema_content["database_schema"]["full_sql"],
+                        {"language": "sql"},
+                    )
+                )
+                blocks.append(self._create_block("heading_2", "Auth Notes"))
+                for note in schema_content["auth_notes"]:
+                    blocks.append(self._create_block("bulleted_list", note))
+
+                doc_content = {
+                    "id": str(uuid.uuid4()),
+                    "title": f"{system_name} - Supabase Schema",
+                    "blocks": blocks,
+                    "supabase_schema": schema_content,
+                }
+
+                from ..services.projects.document_service import DocumentService
+
+                doc_service = DocumentService()
+                success, result_data = doc_service.add_document(
+                    project_id=ctx.deps.project_id,
+                    document_type="technical_spec",
+                    title=f"{system_name} - Supabase Schema",
+                    content=doc_content,
+                    tags=["supabase", "schema", "rls", "postgresql"],
+                    author=ctx.deps.user_id or "DocumentAgent",
+                )
+
+                if success:
+                    doc_id = result_data.get("document", {}).get("id", "unknown")
+                    docs_note = (
+                        "Used crawled Supabase documentation."
+                        if supabase_source
+                        else "No Supabase docs in knowledge base — crawl https://supabase.com/docs."
+                    )
+                    return (
+                        f"Generated Supabase schema for '{system_name}' with RLS policies. "
+                        f"Document ID: {doc_id}. {docs_note}"
+                    )
+                return f"Failed to store Supabase schema: {result_data.get('error', 'Unknown error')}"
+
+            except Exception as e:
+                logger.error(f"Error generating Supabase schema: {e}")
+                return f"Error generating Supabase schema: {str(e)}"
+
+        @agent.tool
+        async def refine_project_plan(
+            ctx: RunContext[DocumentDependencies],
+            feedback: str,
+            plan_title: str = "Project Plan",
+        ) -> str:
+            """Refine an existing project plan from user feedback (EN/DE keywords supported)."""
+            try:
+                from ..server.services.plan_refine_service import (
+                    apply_plan_refinement,
+                    build_plan_document_blocks,
+                    is_plan_refine_request,
+                    resolve_plan_file,
+                )
+
+                if not is_plan_refine_request(feedback) and len(feedback.split()) < 3:
+                    return (
+                        "Please include plan refinement feedback, e.g. "
+                        "'refine plan: move auth to phase 1' or 'Plan ändern: API zuerst'."
+                    )
+
+                from ..server.services.projects import get_project_service
+
+                project_service = get_project_service()
+                success, result = project_service.get_project(ctx.deps.project_id)
+                if not success:
+                    return f"Failed to load project: {result.get('error', 'Unknown error')}"
+
+                project = result.get("project", {})
+                feature_dir = None
+                for entry in project.get("data", []):
+                    if isinstance(entry, dict) and entry.get("feature_dir"):
+                        feature_dir = entry["feature_dir"]
+                        break
+
+                plan_path = resolve_plan_file(feature_dir)
+                existing_plan = ""
+                if plan_path and plan_path.exists():
+                    existing_plan = plan_path.read_text()
+                else:
+                    for doc in project.get("docs", []):
+                        if "plan" in doc.get("title", "").lower():
+                            content = doc.get("content", {})
+                            if isinstance(content, dict) and content.get("blocks"):
+                                existing_plan = "\n".join(
+                                    block.get("content", "")
+                                    for block in content["blocks"]
+                                    if block.get("content")
+                                )
+                            break
+
+                if not existing_plan:
+                    existing_plan = f"# {plan_title}\n\n## Overview\n\n(Plan scaffold)\n"
+
+                refined_plan = apply_plan_refinement(existing_plan, feedback)
+
+                if plan_path:
+                    plan_path.write_text(refined_plan)
+
+                blocks = build_plan_document_blocks(plan_title, refined_plan)
+                doc_content = {"id": str(uuid.uuid4()), "title": plan_title, "blocks": blocks}
+
+                from ..services.projects.document_service import DocumentService
+
+                doc_service = DocumentService()
+                success, result_data = doc_service.add_document(
+                    project_id=ctx.deps.project_id,
+                    document_type="feature_plan",
+                    title=plan_title,
+                    content=doc_content,
+                    tags=["plan", "refined", "spec-kit"],
+                    author=ctx.deps.user_id or "DocumentAgent",
+                )
+
+                if success:
+                    stored = "filesystem plan.md and project document"
+                    return f"Refined project plan saved to {stored}."
+                return f"Plan refined on disk but document store failed: {result_data.get('error')}"
+
+            except Exception as e:
+                logger.error(f"Error refining project plan: {e}")
+                return f"Error refining project plan: {str(e)}"
 
         @agent.tool
         async def request_approval(

@@ -68,6 +68,8 @@ class SpecKitParser:
         if not feature_number:
             feature_number = "000"
 
+        ears_requirements = self.parse_ears_requirements(content)
+
         # Extract description - try multiple patterns
         description = ""
         # Pattern 1: ### Problem section
@@ -88,8 +90,30 @@ class SpecKitParser:
             'feature_number': feature_number,
             'name': feature_name,
             'description': description[:500] if description else f"Specification for {feature_name}",
-            'branch': branch
+            'branch': branch,
+            'ears_requirements': ears_requirements,
         }
+
+    def parse_ears_requirements(self, content: str) -> List[Dict[str, Any]]:
+        """
+        Parse EARS-style requirements from feature.md content.
+
+        Supports lines like: WHEN <condition> THE SYSTEM SHALL <behavior>
+        """
+        requirements: List[Dict[str, Any]] = []
+        pattern = re.compile(
+            r'WHEN\s+(.+?)\s+THE\s+SYSTEM\s+SHALL\s+(.+?)(?:\.|$)',
+            re.IGNORECASE | re.MULTILINE,
+        )
+        for match in pattern.finditer(content):
+            condition = match.group(1).strip()
+            behavior = match.group(2).strip()
+            requirements.append({
+                'condition': condition,
+                'behavior': behavior,
+                'text': f"WHEN {condition} THE SYSTEM SHALL {behavior}.",
+            })
+        return requirements
 
     async def parse_tasks_md(self, tasks_file: Path) -> List[Dict[str, Any]]:
         """

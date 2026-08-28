@@ -106,6 +106,7 @@ class SpecKitFileHandler(FileSystemEventHandler):
                 'feature_dir': str(feature_dir),
                 'branch': spec_data.get('branch'),
                 'description': spec_data['description'],
+                'ears_requirements': spec_data.get('ears_requirements', []),
                 'spec_files': {
                     'feature': str(feature_file)
                 }
@@ -116,6 +117,13 @@ class SpecKitFileHandler(FileSystemEventHandler):
             description = spec_data.get('description', '')
             if metadata.get('feature_number'):
                 description = f"[{metadata['feature_number']}] {description}"
+
+            ears_requirements = spec_data.get('ears_requirements') or []
+            if ears_requirements:
+                ears_summary = "; ".join(
+                    req.get('text', '')[:120] for req in ears_requirements[:5]
+                )
+                description = f"{description}\n\nEARS: {ears_summary}"
 
             success, result = self.project_service.create_project(
                 title=spec_data['name'],
@@ -137,6 +145,9 @@ class SpecKitFileHandler(FileSystemEventHandler):
                 }).eq("id", project_id).execute()
 
             logger.info(f"✅ Project created: {project_id} ({project['title']})")
+
+            if ears_requirements:
+                await self._store_ears_document(project_id, spec_data['name'], ears_requirements)
 
         except Exception as e:
             logger.error(f"❌ Failed to create project: {e}", exc_info=True)
@@ -198,19 +209,38 @@ class SpecKitFileHandler(FileSystemEventHandler):
 
             # Re-parse specification files
             feature_file = feature_dir / "feature.md"
+            plan_file = feature_dir / "plan.md"
             if feature_file.exists():
                 spec_data = await self.parser.parse_feature_spec(feature_file)
 
                 # Update project using service method (works for both backends)
+                description = spec_data.get('description', '')
+                ears_requirements = spec_data.get('ears_requirements') or []
+                if ears_requirements:
+                    ears_summary = "; ".join(
+                        req.get('text', '')[:120] for req in ears_requirements[:5]
+                    )
+                    description = f"{description}\n\nEARS: {ears_summary}"
+
                 success, result = self.project_service.update_project(
                     project_id=project_id,
-                    title=spec_data['name']
+                    update_fields={
+                        "title": spec_data['name'],
+                        "description": description,
+                    },
                 )
 
                 if success:
                     logger.info(f"✅ Updated project {project_id}")
+                    if ears_requirements:
+                        await self._store_ears_document(
+                            project_id, spec_data['name'], ears_requirements
+                        )
                 else:
                     logger.error(f"Failed to update project {project_id}: {result.get('error')}")
+
+            if plan_file.exists():
+                await self._sync_plan_document(project_id, plan_file, project.get('title', ''))
 
             # Sync tasks from tasks.md
             tasks_file = feature_dir / "tasks.md"
@@ -263,6 +293,65 @@ class SpecKitFileHandler(FileSystemEventHandler):
 
         except Exception as e:
             logger.error(f"❌ Failed to sync tasks: {e}", exc_info=True)
+
+    async def _store_ears_document(
+        self,
+        project_id: str,
+        feature_name: str,
+        ears_requirements: list,
+    ):
+        """Store parsed EARS requirements as a project document for task traceability."""
+        try:
+            from .projects.document_service import DocumentService
+            from .plan_refine_service import build_plan_document_blocks
+
+            lines = [
+                f"WHEN {req['condition']} THE SYSTEM SHALL {req['behavior']}."
+                for req in ears_requirements
+            ]
+            body = "\n".join(f"- {line}" for line in lines)
+            blocks = build_plan_document_blocks(f"{feature_name} - EARS Requirements", body)
+
+            doc_service = DocumentService()
+            doc_service.add_document(
+                project_id=project_id,
+                document_type="prd",
+                title=f"{feature_name} - EARS Requirements",
+                content={"title": f"{feature_name} - EARS Requirements", "blocks": blocks},
+                tags=["ears", "requirements", "spec-kit"],
+                author="SpecKitWatcher",
+            )
+            logger.info(f"📄 Stored {len(ears_requirements)} EARS requirements for {feature_name}")
+        except Exception as e:
+            logger.error(f"Failed to store EARS document: {e}", exc_info=True)
+
+    async def _sync_plan_document(self, project_id: str, plan_file: Path, project_title: str):
+        """Sync plan.md sections into a project document."""
+        try:
+            from .projects.document_service import DocumentService
+            from .plan_refine_service import build_plan_document_blocks
+
+            sections = await self.parser.parse_plan_md(plan_file)
+            if not sections:
+                return
+
+            summary_lines = [f"## {name.replace('_', ' ').title()}\n{content[:500]}"
+                             for name, content in sections.items()]
+            body = "\n\n".join(summary_lines)
+            blocks = build_plan_document_blocks(f"{project_title} - Plan", body)
+
+            doc_service = DocumentService()
+            doc_service.add_document(
+                project_id=project_id,
+                document_type="feature_plan",
+                title=f"{project_title} - Plan",
+                content={"title": f"{project_title} - Plan", "blocks": blocks, "plan_sections": sections},
+                tags=["plan", "spec-kit"],
+                author="SpecKitWatcher",
+            )
+            logger.info(f"📄 Synced plan.md for project {project_id}")
+        except Exception as e:
+            logger.error(f"Failed to sync plan document: {e}", exc_info=True)
 
     async def _find_project_by_feature(self, feature_name: str) -> Optional[dict]:
         """Find Archon project by feature directory name"""

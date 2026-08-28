@@ -17,6 +17,11 @@ from pydantic_ai import Agent, RunContext
 
 from .base_agent import ArchonDependencies, BaseAgent
 from .mcp_client import get_mcp_client
+from .retrieval_gate import (
+	build_retrieval_required_failure,
+	is_meta_query,
+	requires_retrieval_before_answer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +34,8 @@ class RagDependencies(ArchonDependencies):
     source_filter: str | None = None
     match_count: int = 5
     progress_callback: Any | None = None  # Callback for progress updates
+    retrieval_performed: bool = False
+    auto_retrieval_used: bool = False
 
 
 class RagQueryResult(BaseModel):
@@ -134,6 +141,7 @@ class RagAgent(BaseAgent[RagDependencies, str]):
             ctx: RunContext[RagDependencies], query: str, source_filter: str | None = None
         ) -> str:
             """Search through documents using RAG query."""
+            ctx.deps.retrieval_performed = True
             try:
                 # Use source filter from context if not provided
                 if source_filter is None:
@@ -230,6 +238,7 @@ class RagAgent(BaseAgent[RagDependencies, str]):
             ctx: RunContext[RagDependencies], query: str, source_filter: str | None = None
         ) -> str:
             """Search for code examples related to the query."""
+            ctx.deps.retrieval_performed = True
             try:
                 # Use source filter from context if not provided
                 if source_filter is None:
@@ -313,6 +322,46 @@ class RagAgent(BaseAgent[RagDependencies, str]):
 
         return agent
 
+    async def _auto_retrieve_context(
+        self,
+        query: str,
+        deps: RagDependencies,
+    ) -> str:
+        """Run knowledge-base search when the agent skipped retrieval tools."""
+        if source_filter := deps.source_filter:
+            source_arg = source_filter
+        else:
+            source_arg = None
+
+        mcp_client = await get_mcp_client()
+        result_json = await mcp_client.perform_rag_query(
+            query=query,
+            source=source_arg,
+            match_count=deps.match_count,
+        )
+        import json
+
+        result = json.loads(result_json)
+        if not result.get("success", False):
+            return f"Auto-retrieval failed: {result.get('error', 'Unknown error')}"
+
+        results = result.get("results", [])
+        if not results:
+            return "Auto-retrieval completed but found no matching documents."
+
+        snippets = []
+        for i, res in enumerate(results[: deps.match_count], 1):
+            metadata = res.get("metadata", {})
+            source = metadata.get("source", "Unknown")
+            content = res.get("content", "")
+            if len(content) > 600:
+                content = content[:600] + "..."
+            snippets.append(f"[{i}] Source: {source}\n{content}")
+
+        deps.retrieval_performed = True
+        deps.auto_retrieval_used = True
+        return "Auto-retrieved knowledge base context:\n\n" + "\n\n---\n\n".join(snippets)
+
     def get_system_prompt(self) -> str:
         """Get the base system prompt for this agent."""
         try:
@@ -358,12 +407,44 @@ class RagAgent(BaseAgent[RagDependencies, str]):
         )
 
         try:
-            # Run the agent and get the string response
-            response_text = await self.run(user_message, deps)
+            needs_retrieval = requires_retrieval_before_answer(user_message)
+            augmented_message = user_message
+
+            if needs_retrieval and not is_meta_query(user_message):
+                augmented_message = (
+                    f"{user_message}\n\n"
+                    "[System: You MUST call search_documents before answering factual questions.]"
+                )
+
+            response_text = await self.run(augmented_message, deps)
+
+            if needs_retrieval and not deps.retrieval_performed:
+                self.logger.warning("RAG agent answered without retrieval — auto-searching")
+                retrieval_context = await self._auto_retrieve_context(user_message, deps)
+                follow_up = (
+                    f"Original question: {user_message}\n\n"
+                    f"{retrieval_context}\n\n"
+                    "Using ONLY the retrieved context above, provide a cited answer. "
+                    "If context is insufficient, say what is missing."
+                )
+                response_text = await self.run(follow_up, deps)
+
+            if needs_retrieval and not deps.retrieval_performed:
+                failure = build_retrieval_required_failure(user_message)
+                return RagQueryResult(
+                    query_type="error",
+                    original_query=user_message,
+                    refined_query=None,
+                    results_found=0,
+                    sources=[],
+                    answer=failure["message"],
+                    citations=[],
+                    success=False,
+                    message=str(failure["message"]),
+                )
+
             self.logger.info("RAG query completed successfully")
 
-            # Create a structured result from the response text
-            # Try to extract some basic information from the response
             query_type = "search"  # Default type
             results_found = 0
             sources = []
@@ -377,7 +458,7 @@ class RagAgent(BaseAgent[RagDependencies, str]):
                 if match:
                     results_found = int(match.group(1))
 
-            if "available sources" in response_text.lower():
+            if is_meta_query(user_message) or "available sources" in response_text.lower():
                 query_type = "list_sources"
             elif "code example" in response_text.lower():
                 query_type = "code_search"
@@ -388,6 +469,10 @@ class RagAgent(BaseAgent[RagDependencies, str]):
             source_lines = [line for line in response_text.split("\n") if "Source:" in line]
             sources = [line.split("Source:")[-1].strip() for line in source_lines]
 
+            message = "Query completed successfully"
+            if deps.auto_retrieval_used:
+                message = "Query completed after automatic knowledge-base retrieval"
+
             return RagQueryResult(
                 query_type=query_type,
                 original_query=user_message,
@@ -397,7 +482,7 @@ class RagAgent(BaseAgent[RagDependencies, str]):
                 answer=response_text,
                 citations=[],  # Could be enhanced to extract citations
                 success=True,
-                message="Query completed successfully",
+                message=message,
             )
 
         except Exception as e:

@@ -20,6 +20,7 @@ from mcp.server.fastmcp import Context, FastMCP
 
 # Import service discovery for HTTP communication
 from src.server.config.service_discovery import get_api_url
+from src.mcp_server.utils.research_tracker import mark_research_performed
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,7 @@ def register_rag_tools(mcp: FastMCP):
 
                 if response.status_code == 200:
                     result = response.json()
+                    mark_research_performed(ctx)
                     return json.dumps(
                         {
                             "success": True,
@@ -190,6 +192,7 @@ def register_rag_tools(mcp: FastMCP):
 
                 if response.status_code == 200:
                     result = response.json()
+                    mark_research_performed(ctx)
                     return json.dumps(
                         {
                             "success": True,
@@ -334,6 +337,7 @@ def register_rag_tools(mcp: FastMCP):
 
                 if response.status_code == 200:
                     page_data = response.json()
+                    mark_research_performed(ctx)
                     return json.dumps(
                         {
                             "success": True,

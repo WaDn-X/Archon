@@ -34,6 +34,12 @@ from ..services.projects import (
 )
 from ..services.projects.document_service import DocumentService
 from ..services.projects.versioning_service import VersioningService
+from ..services.plan_refine_service import (
+    apply_plan_refinement,
+    build_plan_document_blocks,
+    is_plan_refine_request,
+    resolve_plan_file,
+)
 
 # Using HTTP polling for real-time updates
 
@@ -73,6 +79,11 @@ class CreateTaskRequest(BaseModel):
     task_order: int | None = 0
     priority: str | None = "medium"
     feature: str | None = None
+
+
+class RefinePlanRequest(BaseModel):
+    feedback: str
+    plan_title: str | None = "Project Plan"
 
 
 @router.get("/projects")
@@ -372,6 +383,81 @@ async def get_project(project_id: str):
         raise
     except Exception as e:
         logfire.error(f"Failed to get project | error={str(e)} | project_id={project_id}")
+        raise HTTPException(status_code=500, detail={"error": str(e)})
+
+
+@router.post("/projects/{project_id}/refine-plan")
+async def refine_project_plan(project_id: str, request: RefinePlanRequest):
+    """Refine an existing spec-kit plan from user feedback (EN/DE intent keywords)."""
+    try:
+        if not request.feedback.strip():
+            raise HTTPException(status_code=400, detail={"error": "feedback is required"})
+
+        project_service = ProjectService(get_supabase_client())
+        success, result = project_service.get_project(project_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=result)
+
+        project = result.get("project", {})
+        feature_dir = None
+        for entry in project.get("data", []):
+            if isinstance(entry, dict) and entry.get("feature_dir"):
+                feature_dir = entry["feature_dir"]
+                break
+
+        plan_path = resolve_plan_file(feature_dir)
+        existing_plan = ""
+        if plan_path and plan_path.exists():
+            existing_plan = plan_path.read_text()
+        else:
+            for doc in project.get("docs", []):
+                if "plan" in doc.get("title", "").lower():
+                    content = doc.get("content", {})
+                    if isinstance(content, dict) and content.get("blocks"):
+                        existing_plan = "\n".join(
+                            block.get("content", "")
+                            for block in content["blocks"]
+                            if block.get("content")
+                        )
+                    break
+
+        plan_title = request.plan_title or f"{project.get('title', 'Project')} - Plan"
+        if not existing_plan:
+            existing_plan = f"# {plan_title}\n\n## Overview\n\n(Plan scaffold)\n"
+
+        refined_plan = apply_plan_refinement(existing_plan, request.feedback)
+        if plan_path:
+            plan_path.write_text(refined_plan)
+
+        blocks = build_plan_document_blocks(plan_title, refined_plan)
+        doc_service = DocumentService()
+        doc_success, doc_result = doc_service.add_document(
+            project_id=project_id,
+            document_type="feature_plan",
+            title=plan_title,
+            content={"title": plan_title, "blocks": blocks},
+            tags=["plan", "refined", "spec-kit"],
+            author="api",
+        )
+
+        if not doc_success:
+            raise HTTPException(status_code=500, detail=doc_result)
+
+        logfire.info(
+            f"Plan refined | project_id={project_id} | intent_detected={is_plan_refine_request(request.feedback)}"
+        )
+        return {
+            "success": True,
+            "project_id": project_id,
+            "plan_title": plan_title,
+            "plan_path": str(plan_path) if plan_path else None,
+            "document_id": doc_result.get("document", {}).get("id"),
+            "message": "Plan refined successfully",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logfire.error(f"Failed to refine plan | project_id={project_id} | error={str(e)}")
         raise HTTPException(status_code=500, detail={"error": str(e)})
 
 
