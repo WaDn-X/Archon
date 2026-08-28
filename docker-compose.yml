@@ -99,7 +99,6 @@ services:
     depends_on:
       archon-server:
         condition: service_healthy
-      
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
@@ -208,6 +207,9 @@ services:
   archon-frontend:
     build: ./archon-ui-main
     container_name: archon-ui
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
     ports:
       - "${ARCHON_UI_PORT:-3737}:3737"
     environment:
@@ -237,3 +239,9 @@ services:
 networks:
   app-network:
     driver: bridge
+    driver_opts:
+      # Use reliable DNS servers to prevent DNS resolution failures
+      # during Docker builds and container runtime
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    # Note: DNS configuration should be done at the service level if needed
+    # using the 'dns' key in individual service definitions
