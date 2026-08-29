@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from ..security.request_origin import is_internal_request
 from ..services.credential_service import credential_service
 
 logger = logging.getLogger(__name__)
@@ -25,30 +26,6 @@ ALLOWED_INTERNAL_IPS = [
     "archon-agents",  # Docker service name
     "archon-mcp",  # Docker service name
 ]
-
-
-def is_internal_request(request: Request) -> bool:
-    """Check if request is from an internal source."""
-    client_host = request.client.host if request.client else None
-
-    if not client_host:
-        return False
-
-    # Check if it's a Docker network IP (172.16.0.0/12 range)
-    if client_host.startswith("172."):
-        parts = client_host.split(".")
-        if len(parts) == 4:
-            second_octet = int(parts[1])
-            # Docker uses 172.16.0.0 - 172.31.255.255
-            if 16 <= second_octet <= 31:
-                logger.info(f"Allowing Docker network request from {client_host}")
-                return True
-
-    # Check if it's localhost
-    if client_host in ["127.0.0.1", "::1", "localhost"]:
-        return True
-
-    return False
 
 
 @router.get("/health")

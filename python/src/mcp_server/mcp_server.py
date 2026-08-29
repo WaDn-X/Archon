@@ -224,18 +224,18 @@ IMPORTANT: Always use source_id (not URLs or domain names) for filtering!
 ## 📋 Core Workflow
 
 ### Task Management Cycle
-1. **Get current task**: `list_tasks(task_id="...")` 
-2. **Search/List tasks**: `list_tasks(query="auth", filter_by="status", filter_value="todo")`
+1. **Get current task**: `find_tasks(task_id="...")` 
+2. **Search/List tasks**: `find_tasks(query="auth", filter_by="status", filter_value="todo")`
 3. **Mark as doing**: `manage_task("update", task_id="...", status="doing")`
 4. **Research phase**:
    - `rag_search_knowledge_base(query="...", match_count=5)`
    - `rag_search_code_examples(query="...", match_count=3)`
 5. **Implementation**: Code based on research findings
 6. **Mark for review**: `manage_task("update", task_id="...", status="review")`
-7. **Get next task**: `list_tasks(filter_by="status", filter_value="todo")`
+7. **Get next task**: `find_tasks(filter_by="status", filter_value="todo")`
 
 ### Consolidated Task Tools (Optimized ~2 tools from 5)
-- `list_tasks(query=None, task_id=None, filter_by=None, filter_value=None, per_page=10)`
+- `find_tasks(query=None, task_id=None, filter_by=None, filter_value=None, per_page=10)`
   - list + search + get in one tool
   - Search with keyword query parameter (optional)
   - task_id parameter for getting single task (full details)
@@ -253,16 +253,22 @@ IMPORTANT: Always use source_id (not URLs or domain names) for filtering!
 ## 🏗️ Project Management
 
 ### Project Tools
-- `list_projects(project_id=None, query=None, page=1, per_page=10)`
+- `find_projects(project_id=None, query=None, page=1, per_page=10)`
   - List all projects, search by query, or get specific project by ID
 - `manage_project(action, project_id=None, title=None, description=None, github_repo=None)`
   - Actions: "create", "update", "delete"
 
 ### Document Tools
-- `list_documents(project_id, document_id=None, query=None, document_type=None, page=1, per_page=10)`
+- `find_documents(project_id, document_id=None, query=None, document_type=None, page=1, per_page=10)`
   - List project documents, search, filter by type, or get specific document
 - `manage_document(action, project_id, document_id=None, title=None, document_type=None, content=None, ...)`
   - Actions: "create", "update", "delete"
+
+### Version Tools
+- `find_versions(project_id, field_name=None, version_number=None, page=1, per_page=10)`
+  - List version history or get a specific version
+- `manage_version(action, project_id, field_name, version_number=None, content=None, ...)`
+  - Actions: "create", "restore"
 
 ## 🔍 Research Patterns
 

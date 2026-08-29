@@ -12,7 +12,7 @@ import { credentialsService } from '../../services/credentialsService';
 import OllamaModelDiscoveryModal from './OllamaModelDiscoveryModal';
 import OllamaModelSelectionModal from './OllamaModelSelectionModal';
 
-type ProviderKey = 'openai' | 'google' | 'ollama' | 'anthropic' | 'grok' | 'openrouter';
+type ProviderKey = 'openai' | 'google' | 'ollama' | 'anthropic' | 'grok' | 'openrouter' | 'vertexai';
 
 // Providers that support embedding models
 const EMBEDDING_CAPABLE_PROVIDERS: ProviderKey[] = ['openai', 'google', 'openrouter', 'ollama'];
@@ -34,7 +34,8 @@ const getDefaultModels = (provider: ProviderKey): ProviderModels => {
     google: 'gemini-1.5-flash',
     grok: 'grok-3-mini', // Updated to use grok-3-mini as default
     openrouter: 'openai/gpt-4o-mini',
-    ollama: 'llama3:8b'
+    ollama: 'llama3:8b',
+    vertexai: 'google/gemini-2.0-flash-001',
   };
 
   const embeddingDefaults: Record<ProviderKey, string> = {
@@ -43,7 +44,8 @@ const getDefaultModels = (provider: ProviderKey): ProviderModels => {
     google: 'text-embedding-004',
     grok: 'text-embedding-3-small', // Fallback to OpenAI
     openrouter: 'openai/text-embedding-3-small', // MUST include provider prefix for OpenRouter
-    ollama: 'nomic-embed-text'
+    ollama: 'nomic-embed-text',
+    vertexai: 'text-embedding-004',
   };
 
   return {
@@ -71,7 +73,7 @@ const loadProviderModels = (): ProviderModelMap => {
   }
 
   // Return defaults for all providers if nothing saved
-  const providers: ProviderKey[] = ['openai', 'google', 'openrouter', 'ollama', 'anthropic', 'grok'];
+  const providers: ProviderKey[] = ['openai', 'google', 'openrouter', 'ollama', 'anthropic', 'grok', 'vertexai'];
   const defaultModels: ProviderModelMap = {} as ProviderModelMap;
 
   providers.forEach(provider => {
@@ -89,6 +91,7 @@ const colorStyles: Record<ProviderKey, string> = {
   ollama: 'border-purple-500 bg-purple-500/10',
   anthropic: 'border-orange-500 bg-orange-500/10',
   grok: 'border-yellow-500 bg-yellow-500/10',
+  vertexai: 'border-[#011379] bg-[#011379]/10',
 };
 
 const providerWarningAlertStyle = 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 text-yellow-800 dark:text-yellow-300';
@@ -102,10 +105,11 @@ const providerDisplayNames: Record<ProviderKey, string> = {
   ollama: 'Ollama',
   anthropic: 'Anthropic',
   grok: 'Grok',
+  vertexai: 'Vertex AI',
 };
 
 const isProviderKey = (value: unknown): value is ProviderKey =>
-  typeof value === 'string' && ['openai', 'google', 'openrouter', 'ollama', 'anthropic', 'grok'].includes(value);
+  typeof value === 'string' && ['openai', 'google', 'openrouter', 'ollama', 'anthropic', 'grok', 'vertexai'].includes(value);
 
 // Default base URL for Ollama instances when not explicitly configured
 const DEFAULT_OLLAMA_URL = 'http://host.docker.internal:11434/v1';
@@ -116,6 +120,7 @@ const PROVIDER_CREDENTIAL_KEYS = [
   'ANTHROPIC_API_KEY',
   'OPENROUTER_API_KEY',
   'GROK_API_KEY',
+  'GCP_PROJECT_ID',
 ] as const;
 
 type ProviderCredentialKey = typeof PROVIDER_CREDENTIAL_KEYS[number];
@@ -126,6 +131,7 @@ const CREDENTIAL_PROVIDER_MAP: Record<ProviderCredentialKey, ProviderKey> = {
   ANTHROPIC_API_KEY: 'anthropic',
   OPENROUTER_API_KEY: 'openrouter',
   GROK_API_KEY: 'grok',
+  GCP_PROJECT_ID: 'vertexai',
 };
 
 const normalizeBaseUrl = (url?: string | null): string | null => {
@@ -343,6 +349,29 @@ export const RAGSettings = ({
   }, [ragSettings.LLM_PROVIDER, reloadApiCredentials]);
 
   useEffect(() => {
+    if (chatProvider !== 'vertexai') {
+      return;
+    }
+
+    const loadVertexCredentials = async () => {
+      try {
+        const project = await credentialsService.getCredential('GCP_PROJECT_ID');
+        const region = await credentialsService.getCredential('GCP_REGION');
+        if (project.value) {
+          setGcpProjectId(project.value);
+        }
+        if (region.value) {
+          setGcpRegion(region.value);
+        }
+      } catch (error) {
+        console.error('Failed to load Vertex AI credentials:', error);
+      }
+    };
+
+    void loadVertexCredentials();
+  }, [chatProvider]);
+
+  useEffect(() => {
     const needsDetection = chatProvider === 'ollama' || embeddingProvider === 'ollama';
 
     if (!needsDetection) {
@@ -451,6 +480,9 @@ export const RAGSettings = ({
   }>({});
   const [ollamaServerStatus, setOllamaServerStatus] = useState<'unknown' | 'online' | 'offline'>('unknown');
   const [ollamaManualConfirmed, setOllamaManualConfirmed] = useState(false);
+  const [gcpProjectId, setGcpProjectId] = useState('');
+  const [gcpRegion, setGcpRegion] = useState('us-central1');
+  const [savingVertexConfig, setSavingVertexConfig] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -499,7 +531,7 @@ export const RAGSettings = ({
   useEffect(() => {
     const testConnections = async () => {
       // Test all supported providers
-      const providers = ['openai', 'google', 'anthropic', 'openrouter', 'grok'];
+      const providers = ['openai', 'google', 'anthropic', 'openrouter', 'grok', 'vertexai'];
 
       for (const provider of providers) {
         // Don't test if we've already checked recently (within last 30 seconds)
@@ -991,6 +1023,14 @@ const manualTestConnection = async (
         if (!hasOpenRouterKey) return 'missing';
         if (openRouterChecking) return 'partial';
         return openRouterConnected ? 'configured' : 'missing';
+      case 'vertexai': {
+        const hasGcpProject = hasApiCredential('GCP_PROJECT_ID');
+        const vertexConnected = providerConnectionStatus['vertexai']?.connected || false;
+        const vertexChecking = providerConnectionStatus['vertexai']?.checking || false;
+        if (!hasGcpProject) return 'missing';
+        if (vertexChecking) return 'partial';
+        return vertexConnected ? 'configured' : 'missing';
+      }
       default:
         return 'missing';
     }
@@ -1013,7 +1053,11 @@ const manualTestConnection = async (
       providerAlertMessage = 'Local Ollama service detected. Click "Test Connection" to confirm model availability.';
       providerAlertClassName = providerWarningAlertStyle;
     }
-  } else if (activeProviderKey && selectedProviderStatus === 'missing') {
+  } else if (activeProviderKey === 'vertexai' && selectedProviderStatus === 'missing') {
+    providerAlertMessage =
+      'Vertex AI requires GCP_PROJECT_ID and Application Default Credentials on the Archon server (gcloud auth application-default login or a service account).';
+    providerAlertClassName = providerMissingAlertStyle;
+  } else if (activeProviderKey && activeProviderKey !== 'vertexai' && selectedProviderStatus === 'missing') {
     const providerName = providerDisplayNames[activeProviderKey] ?? activeProviderKey;
     providerAlertMessage = `${providerName} API key is not configured. Add it in Settings > API Keys.`;
     providerAlertClassName = providerMissingAlertStyle;
@@ -1291,7 +1335,7 @@ const manualTestConnection = async (
             Select {activeSelection === 'chat' ? 'Chat' : 'Embedding'} Provider
           </label>
           <div className={`grid gap-3 mb-4 ${
-            activeSelection === 'chat' ? 'grid-cols-6' : 'grid-cols-4'
+            activeSelection === 'chat' ? 'grid-cols-7' : 'grid-cols-4'
           }`}>
             {[
               { key: 'openai', name: 'OpenAI', logo: '/img/OpenAI.png', color: 'green' },
@@ -1299,10 +1343,13 @@ const manualTestConnection = async (
               { key: 'openrouter', name: 'OpenRouter', logo: '/img/OpenRouter.png', color: 'cyan' },
               { key: 'ollama', name: 'Ollama', logo: '/img/Ollama.png', color: 'purple' },
               { key: 'anthropic', name: 'Anthropic', logo: '/img/claude-logo.svg', color: 'orange' },
-              { key: 'grok', name: 'Grok', logo: '/img/Grok.png', color: 'yellow' }
+              { key: 'grok', name: 'Grok', logo: '/img/Grok.png', color: 'yellow' },
+              { key: 'vertexai', name: 'Vertex AI', logo: '/img/google-logo.svg', color: 'indigo' },
             ]
               .filter(provider =>
-                activeSelection === 'chat' || EMBEDDING_CAPABLE_PROVIDERS.includes(provider.key as ProviderKey)
+                activeSelection === 'chat'
+                  ? true
+                  : EMBEDDING_CAPABLE_PROVIDERS.includes(provider.key as ProviderKey)
               )
               .map(provider => (
               <button
@@ -1492,6 +1539,70 @@ const manualTestConnection = async (
               {saving ? 'Saving...' : 'Save Settings'}
             </Button>
           </div>
+
+          {activeSelection === 'chat' && chatProvider === 'vertexai' && (
+            <div className="mt-4 p-4 rounded-lg border border-[#011379]/30 bg-[#011379]/5">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                Vertex AI (GCP)
+              </h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Input
+                  label="GCP Project ID"
+                  value={gcpProjectId}
+                  onChange={e => setGcpProjectId(e.target.value)}
+                  placeholder="my-gcp-project"
+                  accentColor="green"
+                />
+                <Input
+                  label="GCP Region (optional)"
+                  value={gcpRegion}
+                  onChange={e => setGcpRegion(e.target.value)}
+                  placeholder="us-central1"
+                  accentColor="green"
+                />
+              </div>
+              <p className="mt-2 text-xs text-gray-600 dark:text-zinc-400">
+                Uses Application Default Credentials on the server. Authenticate with{' '}
+                <code>gcloud auth application-default login</code> or a service account.
+                <span className="block mt-1 text-gray-500 dark:text-zinc-500">
+                  ADC auf dem Server — z. B. Service Account oder gcloud application-default login.
+                </span>
+              </p>
+              <Button
+                variant="outline"
+                accentColor="green"
+                className="mt-3"
+                disabled={savingVertexConfig || !gcpProjectId.trim()}
+                onClick={async () => {
+                  try {
+                    setSavingVertexConfig(true);
+                    await credentialsService.updateCredential({
+                      key: 'GCP_PROJECT_ID',
+                      value: gcpProjectId.trim(),
+                      is_encrypted: false,
+                      category: 'rag_strategy',
+                    });
+                    await credentialsService.updateCredential({
+                      key: 'GCP_REGION',
+                      value: gcpRegion.trim() || 'us-central1',
+                      is_encrypted: false,
+                      category: 'rag_strategy',
+                    });
+                    await reloadApiCredentials();
+                    await testProviderConnection('vertexai');
+                    showToast('Vertex AI settings saved', 'success');
+                  } catch (error) {
+                    console.error('Failed to save Vertex AI settings:', error);
+                    showToast('Failed to save Vertex AI settings', 'error');
+                  } finally {
+                    setSavingVertexConfig(false);
+                  }
+                }}
+              >
+                {savingVertexConfig ? 'Saving...' : 'Save Vertex AI Settings'}
+              </Button>
+            </div>
+          )}
 
           {/* Expandable Ollama Configuration Container */}
           {showOllamaConfig && ((activeSelection === 'chat' && chatProvider === 'ollama') ||
@@ -2380,6 +2491,8 @@ function getDisplayedChatModel(ragSettings: RAGSettingsProps["ragSettings"]): st
       return '';
     case 'openrouter':
       return 'anthropic/claude-3.5-sonnet';
+    case 'vertexai':
+      return 'google/gemini-2.0-flash-001';
     default:
       return 'gpt-4o-mini';
   }
@@ -2428,6 +2541,8 @@ function getModelPlaceholder(provider: ProviderKey): string {
       return 'e.g., llama2, mistral';
     case 'openrouter':
       return 'e.g., anthropic/claude-3.5-sonnet';
+    case 'vertexai':
+      return 'e.g., google/gemini-2.0-flash-001';
     default:
       return 'e.g., gpt-4o-mini';
   }

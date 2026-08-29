@@ -151,6 +151,25 @@ def test_builtin_mcp_tools_register_without_allowlist_entries() -> None:
     assert "rag_search_knowledge_base" in registered
 
 
+def test_plugin_path_outside_directory_is_rejected(
+	tmp_path: Path, allowlist_service: AllowlistService
+) -> None:
+	plugin_dir = tmp_path / "plugins"
+	plugin_dir.mkdir()
+	plugin_file = plugin_dir / "demo_plugin.py"
+	plugin_file.write_text("PLUGIN_VALUE = 'ok'\n", encoding="utf-8")
+	outside_file = tmp_path / "outside.py"
+	outside_file.write_text("PLUGIN_VALUE = 'bad'\n", encoding="utf-8")
+	plugin_hash = compute_file_sha256(outside_file)
+	_write_allowlist(
+		allowlist_service.path,
+		{"plugins": [{"name": "outside", "sha256": plugin_hash, "enabled": True}], "executors": []},
+	)
+
+	with pytest.raises(PluginNotAllowedError, match="outside the allowed plugin directory"):
+		load_allowed_plugin(outside_file, allowed_root=plugin_dir)
+
+
 def test_allowlist_api_roundtrip(allowlist_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import importlib.util
 
@@ -165,6 +184,7 @@ def test_allowlist_api_roundtrip(allowlist_path: Path, monkeypatch: pytest.Monke
 
     service = AllowlistService(allowlist_path)
     monkeypatch.setattr(module, "get_allowlist_service", lambda: service)
+    monkeypatch.setattr(module, "is_internal_request", lambda _request: True)
 
     app = FastAPI()
     app.include_router(module.router)
@@ -181,3 +201,28 @@ def test_allowlist_api_roundtrip(allowlist_path: Path, monkeypatch: pytest.Monke
     assert get_response.status_code == 200
     data = get_response.json()
     assert data["plugins"][0]["name"] == "demo"
+
+
+def test_allowlist_api_blocks_external_writes(allowlist_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib.util
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    api_path = Path(__file__).resolve().parents[1] / "src" / "server" / "api_routes" / "plugin_allowlist_api.py"
+    spec = importlib.util.spec_from_file_location("plugin_allowlist_api_test_external", api_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    service = AllowlistService(allowlist_path)
+    monkeypatch.setattr(module, "get_allowlist_service", lambda: service)
+    monkeypatch.setattr(module, "is_internal_request", lambda _request: False)
+
+    app = FastAPI()
+    app.include_router(module.router)
+    client = TestClient(app)
+
+    payload = AllowlistFile(plugins=[], executors=[])
+    put_response = client.put("/api/plugins/allowlist", json=payload.model_dump())
+    assert put_response.status_code == 403

@@ -25,7 +25,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
       - supabase-db-data:/var/lib/postgresql/data
-      - ./migration/00-local-init.sql:/docker-entrypoint-initdb.d/00-local-init.sql:ro
+      - ./migration/00-local-init.sh:/docker-entrypoint-initdb.d/00-local-init.sh:ro
       - ./migration/complete_setup.sql:/docker-entrypoint-initdb.d/01-complete-setup.sql:ro
       - ./migration/02-local-grants.sql:/docker-entrypoint-initdb.d/02-local-grants.sql:ro
     networks:

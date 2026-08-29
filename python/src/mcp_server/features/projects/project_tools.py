@@ -74,9 +74,9 @@ def register_project_tools(mcp: FastMCP):
             JSON array of projects or single project (optimized payloads for lists)
         
         Examples:
-            list_projects()  # All projects
-            list_projects(query="auth")  # Search projects
-            list_projects(project_id="proj-123")  # Get specific project
+            find_projects()  # All projects
+            find_projects(query="auth")  # Search projects
+            find_projects(project_id="proj-123")  # Get specific project
         """
         try:
             api_url = get_api_url()
