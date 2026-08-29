@@ -86,7 +86,7 @@ This new vision for Archon replaces the old one (the agenteer). Archon used to b
 
    IMPORTANT NOTES:
    - For cloud Supabase: They recently introduced a new type of service role key but use the legacy one (the longer one).
-   - For local Supabase: Set `SUPABASE_URL` to http://host.docker.internal:8000 (unless you have an IP address set up). To get `SUPABASE_SERVICE_KEY` run `supabase status -o env`.
+   - For local Supabase: run `make local-supabase-env` to generate JWT secrets and env vars, then `make local-supabase` to start the stack. Cloud credentials in `.env` are preserved automatically (overrides go to `.env.local-supabase`).
 
 3. **Database Setup**: In your [Supabase project](https://supabase.com/dashboard) SQL Editor, copy, paste, and execute the contents of `migration/complete_setup.sql`
 
@@ -169,6 +169,8 @@ sudo yum install make
 | `make lint`       | Run linters                                             |
 | `make install`    | Install dependencies                                    |
 | `make check`      | Check environment setup                                 |
+| `make local-supabase-env` | Generate local Supabase JWT/env file            |
+| `make local-supabase`     | Bootstrap env and start local Supabase stack    |
 | `make clean`      | Remove containers and volumes (with confirmation)       |
 
 </details>
@@ -407,6 +409,31 @@ For all services in Docker environment:
 - All services run in Docker containers
 - Better for integration testing
 - Slower frontend updates
+
+#### Local Supabase - `make local-supabase`
+
+Self-hosted PostgreSQL + PostgREST for offline or local-only development:
+
+```bash
+make local-supabase-env   # Generate JWT_SECRET + service_role JWT (no Docker)
+make local-supabase       # Bootstrap env and start the local-supabase profile
+```
+
+- **Cloud-safe**: if `.env` already points at `*.supabase.co`, credentials stay in `.env` and local overrides are written to `.env.local-supabase`.
+- **Docker URL**: `http://supabase-kong:8000` (used by Archon containers on the compose network)
+- **Host/hybrid URL**: `http://localhost:8000` (use from your machine or hybrid frontend dev)
+
+With cloud credentials preserved:
+
+```bash
+docker compose --env-file .env --env-file .env.local-supabase --profile local-supabase up -d
+```
+
+Run unit tests for JWT minting (no Docker required):
+
+```bash
+cd python && uv run pytest tests/test_local_supabase_env.py -v
+```
 
 ### Testing & Code Quality
 
