@@ -14,6 +14,7 @@ from mcp.server.fastmcp import Context, FastMCP
 
 from src.mcp_server.utils.error_handling import MCPErrorFormatter
 from src.mcp_server.utils.timeout_config import get_default_timeout
+from src.mcp_server.utils.research_tracker import has_recent_research
 from src.server.config.service_discovery import get_api_url
 
 logger = logging.getLogger(__name__)
@@ -292,6 +293,20 @@ def register_task_tools(mcp: FastMCP):
                             "task_id required for update",
                             suggestion="Provide task_id to update"
                         )
+
+                    # Require knowledge-base research before starting implementation work
+                    if status == "doing" and not has_recent_research(ctx):
+                        return json.dumps({
+                            "success": False,
+                            "error": "research_required",
+                            "message": (
+                                "Search the knowledge base before setting status to 'doing'. "
+                                "Run rag_search_knowledge_base or rag_search_code_examples first."
+                            ),
+                            "suggestion": (
+                                "rag_search_knowledge_base(query=\"your topic\", match_count=5)"
+                            ),
+                        })
 
                     # Build update fields
                     update_fields = {}

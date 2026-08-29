@@ -196,7 +196,9 @@ MCP_INSTRUCTIONS = """
 1. **Task Management**: ALWAYS use Archon MCP tools for task management.
    - Combine with your local TODO tools for granular tracking
 
-2. **Research First**: Before implementing, use rag_search_knowledge_base and rag_search_code_examples
+2. **Research First (REQUIRED)**: Before factual answers or setting a task to `doing`, you MUST call
+   `rag_search_knowledge_base` and/or `rag_search_code_examples`. Listing sources alone does not count.
+   `manage_task(..., status="doing")` is blocked until a recent RAG search succeeds in this session.
 3. **Task-Driven Development**: Never code without checking current tasks first
 
 ## 🎯 Targeted Documentation Search
