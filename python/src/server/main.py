@@ -32,6 +32,7 @@ from .api_routes.pages_api import router as pages_router
 from .api_routes.progress_api import router as progress_router
 from .api_routes.projects_api import router as projects_router
 from .api_routes.providers_api import router as providers_router
+from .api_routes.plugin_allowlist_api import router as plugin_allowlist_router
 from .api_routes.version_api import router as version_router
 
 # Import modular API routers
@@ -207,6 +208,7 @@ async def skip_health_check_logs(request, call_next):
 
 # Include API routers
 app.include_router(settings_router)
+app.include_router(plugin_allowlist_router)
 app.include_router(mcp_router)
 # app.include_router(mcp_client_router)  # Removed - not part of new architecture
 app.include_router(knowledge_router)
