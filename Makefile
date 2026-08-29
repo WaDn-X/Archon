@@ -5,7 +5,7 @@ SHELL := /bin/bash
 # Docker compose command - prefer newer 'docker compose' plugin over standalone 'docker-compose'
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
-.PHONY: help dev dev-docker dev-docker-full dev-work-orders dev-hybrid-work-orders stop test test-fe test-be lint lint-fe lint-be clean install check agent-work-orders
+.PHONY: help dev dev-docker dev-docker-full dev-work-orders dev-hybrid-work-orders stop test test-fe test-be lint lint-fe lint-be clean install check agent-work-orders local-supabase-env local-supabase
 
 help:
 	@echo "Archon Development Commands"
@@ -26,6 +26,8 @@ help:
 	@echo "  make clean                  - Remove containers and volumes"
 	@echo "  make install                - Install dependencies"
 	@echo "  make check                  - Check environment setup"
+	@echo "  make local-supabase-env     - Generate JWT_SECRET and local Supabase env file"
+	@echo "  make local-supabase         - Bootstrap env and start local Supabase stack"
 
 # Install dependencies
 install:
@@ -121,10 +123,28 @@ dev-hybrid-work-orders: check
 	echo "Or use 'make dev-docker-full' to run everything in Docker."; \
 	@read -p "Press Enter to continue or Ctrl+C to stop..." _
 
+# Bootstrap local Supabase credentials (preserves cloud .env when detected)
+local-supabase-env:
+	@echo "Bootstrapping local Supabase environment..."
+	@cd python && uv run python scripts/local_supabase_env.py
+
+# Start local PostgreSQL + PostgREST via compose profile
+local-supabase: local-supabase-env
+	@set -a; \
+	if [ -f .env ] && grep -qE '^SUPABASE_URL=https?://[^/]*\.supabase\.co' .env; then \
+		$(COMPOSE) --env-file .env --env-file .env.local-supabase --profile local-supabase up -d; \
+	else \
+		$(COMPOSE) --profile local-supabase up -d; \
+	fi; \
+	set +a
+	@echo "✓ Local Supabase stack started"
+	@echo "API (host): http://localhost:$${SUPABASE_API_PORT:-8000}"
+	@echo "API (docker network): http://supabase-kong:8000"
+
 # Stop all services
 stop:
 	@echo "Stopping all services..."
-	@$(COMPOSE) --profile backend --profile frontend --profile full --profile work-orders down
+	@$(COMPOSE) --profile backend --profile frontend --profile full --profile work-orders --profile local-supabase down
 	@echo "✓ Services stopped"
 
 # Run all tests
