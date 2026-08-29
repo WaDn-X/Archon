@@ -141,6 +141,11 @@ def validate_supabase_url(url: str) -> bool:
         if hostname in local_hosts or hostname.endswith(".localhost"):
             return True
 
+        # Docker Compose service names used by the optional local-supabase profile
+        local_docker_services = frozenset({"supabase-kong", "supabase-rest", "supabase-db"})
+        if hostname in local_docker_services:
+            return True
+
         # Check if hostname is a private IP address
         try:
             ip = ipaddress.ip_address(hostname)

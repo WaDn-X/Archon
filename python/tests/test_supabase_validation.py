@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 
 from src.server.config.config import (
     validate_supabase_key,
+    validate_supabase_url,
     ConfigurationError,
     load_environment_config,
 )
@@ -208,3 +209,14 @@ def test_jwt_decoding_with_real_structure():
     is_valid_service, msg_service = validate_supabase_key(service_token)
     assert is_valid_service == True
     assert msg_service == "VALID_SERVICE_KEY"
+
+
+def test_validate_supabase_url_allows_local_docker_service_hostnames():
+    assert validate_supabase_url("http://supabase-kong:8000") is True
+
+
+def test_validate_supabase_url_rejects_http_for_public_hostnames():
+    with pytest.raises(ConfigurationError) as exc_info:
+        validate_supabase_url("http://example.com")
+
+    assert "HTTPS" in str(exc_info.value)

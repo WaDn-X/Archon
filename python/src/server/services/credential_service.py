@@ -443,7 +443,7 @@ class CredentialService:
                 explicit_embedding_provider = rag_settings.get("EMBEDDING_PROVIDER")
 
                 # Validate that embedding provider actually supports embeddings
-                embedding_capable_providers = {"openai", "google", "openrouter", "ollama"}
+                embedding_capable_providers = {"openai", "google", "openrouter", "ollama", "vertexai"}
 
                 if (explicit_embedding_provider and
                     explicit_embedding_provider != "" and
@@ -505,6 +505,7 @@ class CredentialService:
         key_mapping = {
             "openai": "OPENAI_API_KEY",
             "google": "GOOGLE_API_KEY",
+            "vertexai": None,
             "openrouter": "OPENROUTER_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
             "grok": "GROK_API_KEY",
@@ -522,6 +523,8 @@ class CredentialService:
             return rag_settings.get("LLM_BASE_URL", "http://host.docker.internal:11434/v1")
         elif provider == "google":
             return "https://generativelanguage.googleapis.com/v1beta/openai/"
+        elif provider == "vertexai":
+            return None
         elif provider == "openrouter":
             return "https://openrouter.ai/api/v1"
         elif provider == "anthropic":
@@ -579,6 +582,8 @@ async def initialize_credentials() -> None:
     # LLM provider credentials (for sync client support)
     provider_credentials = [
         "GOOGLE_API_KEY",  # Google Gemini API key
+        "GCP_PROJECT_ID",  # Vertex AI project (ADC auth)
+        "GCP_REGION",  # Vertex AI region
         "LLM_PROVIDER",  # Selected provider
         "LLM_BASE_URL",  # Ollama base URL
         "EMBEDDING_MODEL",  # Custom embedding model

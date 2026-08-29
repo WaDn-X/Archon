@@ -1,5 +1,10 @@
 __pycache__
+.venv
+venv
 .env
+.env.backup
+.env.production
+trust_cache.json
 .serena
 .claude/settings.local.json
 PRPs/local

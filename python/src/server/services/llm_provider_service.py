@@ -23,7 +23,7 @@ def _is_valid_provider(provider: str) -> bool:
     """Basic provider validation."""
     if not provider or not isinstance(provider, str):
         return False
-    return provider.lower() in {"openai", "ollama", "google", "openrouter", "anthropic", "grok"}
+    return provider.lower() in {"openai", "ollama", "google", "openrouter", "anthropic", "grok", "vertexai"}
 
 
 def _sanitize_for_log(text: str) -> str:
@@ -496,6 +496,28 @@ async def get_llm_client(
             )
             logger.info("Grok client created successfully")
 
+        elif provider_name == "vertexai":
+            from .vertex_ai_service import (
+                build_vertex_ai_openai_base_url,
+                get_gcp_project_id,
+                get_gcp_region,
+                get_vertex_ai_access_token,
+            )
+
+            project_id = await get_gcp_project_id()
+            if not project_id:
+                raise ValueError("GCP_PROJECT_ID not configured for Vertex AI")
+
+            region = await get_gcp_region()
+            vertex_base_url = base_url or build_vertex_ai_openai_base_url(project_id, region)
+            access_token = await get_vertex_ai_access_token()
+
+            client = openai.AsyncOpenAI(
+                api_key=access_token,
+                base_url=vertex_base_url,
+            )
+            logger.info(f"Vertex AI client created successfully for project {project_id} in {region}")
+
         else:
             raise ValueError(f"Unsupported LLM provider: {provider_name}")
 
@@ -653,6 +675,8 @@ async def get_embedding_model(provider: str | None = None) -> str:
         elif provider_name == "google":
             # Google's latest embedding model
             return "text-embedding-004"
+        elif provider_name == "vertexai":
+            return "text-embedding-004"
         elif provider_name == "openrouter":
             # OpenRouter supports both OpenAI and Google embedding models
             # Model names MUST include provider prefix for OpenRouter API
@@ -740,6 +764,8 @@ def is_valid_embedding_model_for_provider(model: str, provider: str) -> bool:
         return is_openai_embedding_model(model)
     elif provider_lower == "google":
         return is_google_embedding_model(model)
+    elif provider_lower == "vertexai":
+        return is_google_embedding_model(model)
     elif provider_lower in ["openrouter", "anthropic", "grok"]:
         # These providers support both OpenAI and Google models
         return is_openai_embedding_model(model) or is_google_embedding_model(model)
@@ -785,6 +811,8 @@ def get_supported_embedding_models(provider: str) -> list[str]:
     if provider_lower == "openai":
         return openai_models
     elif provider_lower == "google":
+        return google_models
+    elif provider_lower == "vertexai":
         return google_models
     elif provider_lower in ["openrouter", "anthropic", "grok"]:
         # These providers support both OpenAI and Google models
@@ -1216,6 +1244,19 @@ async def validate_provider_instance(provider: str, instance_url: str | None = N
                 elif provider == "google":
                     # For Google, we can't easily list models, just validate client creation
                     model_count = 1  # Assume available if client creation succeeded
+                elif provider == "vertexai":
+                    from .vertex_ai_service import check_vertex_ai_connection
+
+                    result = await check_vertex_ai_connection()
+                    return {
+                        "provider": provider,
+                        "instance_url": instance_url,
+                        "is_available": result.get("ok", False),
+                        "response_time_ms": (time.time() - start_time) * 1000,
+                        "models_available": 1 if result.get("ok") else 0,
+                        "error_message": None if result.get("ok") else result.get("reason"),
+                        "validation_timestamp": time.time(),
+                    }
                 else:
                     model_count = 1
 

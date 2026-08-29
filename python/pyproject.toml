@@ -49,6 +49,7 @@ server = [
     "supabase==2.15.1",
     "asyncpg>=0.29.0",
     # AI/ML libraries
+    "google-auth>=2.40.0",
     "openai==1.71.0",
     # Document processing
     "pypdf2>=3.0.1",
