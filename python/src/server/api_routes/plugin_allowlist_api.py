@@ -31,6 +31,16 @@ class AllowlistEntryActionRequest(BaseModel):
     name: str | None = Field(default=None, description="Entry name for remove/enable/disable")
 
 
+@router.get("/discovered")
+async def get_discovered_plugins() -> list[str]:
+    """Return plugin module names available under python/src/plugins/."""
+    from src.plugins import PLUGIN_DIR
+
+    return sorted(
+        path.stem for path in PLUGIN_DIR.glob("*.py") if not path.name.startswith("_")
+    )
+
+
 @router.get("/allowlist")
 async def get_plugin_allowlist() -> AllowlistFile:
     """Return the current plugin and executor allowlist."""
