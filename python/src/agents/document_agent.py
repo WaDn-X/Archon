@@ -126,6 +126,10 @@ class DocumentAgent(BaseAgent[DocumentDependencies, DocumentOperation]):
 - "Refine the project plan based on feedback" → Use refine_project_plan tool
 - "Update plan architecture section" → Use refine_project_plan tool
 
+**📐 EARS Requirements:**
+- "Generate EARS requirements for magic-link login" → Use generate_ears_requirements tool
+- "Write WHEN/SHALL requirements for this feature" → Use generate_ears_requirements tool
+
 **✅ Change Management:**
 - "Request approval for the API changes" → Use request_approval tool
 - "Submit PRD updates for review" → Use request_approval tool
@@ -782,6 +786,94 @@ class DocumentAgent(BaseAgent[DocumentDependencies, DocumentOperation]):
             except Exception as e:
                 logger.error(f"Error refining project plan: {e}")
                 return f"Error refining project plan: {str(e)}"
+
+        @agent.tool
+        async def generate_ears_requirements(
+            ctx: RunContext[DocumentDependencies],
+            feature_description: str | None = None,
+            write_to_feature_md: bool = True,
+        ) -> str:
+            """Generate EARS requirements (WHEN/THE SYSTEM SHALL) and store them for the project."""
+            try:
+                from ..server.services.ears_service import (
+                    build_ears_document_body,
+                    generate_ears_requirements as generate_ears_lines,
+                    merge_ears_into_feature_md,
+                    resolve_feature_file,
+                )
+                from ..server.services.plan_refine_service import build_plan_document_blocks
+                from ..server.services.projects import get_project_service
+                from ..server.services.spec_kit_parser import SpecKitParser
+                from ..services.projects.document_service import DocumentService
+
+                project_service = get_project_service()
+                success, result = project_service.get_project(ctx.deps.project_id)
+                if not success:
+                    return f"Failed to load project: {result.get('error', 'Unknown error')}"
+
+                project = result.get("project", {})
+                feature_dir = None
+                for entry in project.get("data", []):
+                    if isinstance(entry, dict) and entry.get("feature_dir"):
+                        feature_dir = entry["feature_dir"]
+                        break
+
+                feature_path = resolve_feature_file(feature_dir)
+                parser = SpecKitParser()
+
+                if feature_path and feature_path.exists():
+                    content = feature_path.read_text()
+                elif feature_description:
+                    content = feature_description
+                else:
+                    content = project.get("description") or project.get("title") or ""
+
+                if not content.strip():
+                    return "No feature text available. Provide feature_description."
+
+                existing_ears = parser.parse_ears_requirements(content)
+                if existing_ears:
+                    return (
+                        f"Existing EARS preserved ({len(existing_ears)} requirements). "
+                        "Generation skipped to avoid overwriting spec-kit requirements."
+                    )
+
+                generated = await generate_ears_lines(content, existing_ears)
+                if not generated:
+                    return "No new EARS requirements were generated."
+
+                updated_content = merge_ears_into_feature_md(content, generated)
+                if write_to_feature_md and feature_path:
+                    feature_path.write_text(updated_content)
+
+                parsed_ears = parser.parse_ears_requirements(updated_content)
+                feature_name = project.get("title", "Feature")
+                ears_title = f"{feature_name} - EARS Requirements"
+                blocks = build_plan_document_blocks(
+                    ears_title,
+                    build_ears_document_body(parsed_ears),
+                )
+
+                doc_service = DocumentService()
+                success, result_data = doc_service.add_document(
+                    project_id=ctx.deps.project_id,
+                    document_type="prd",
+                    title=ears_title,
+                    content={"title": ears_title, "blocks": blocks},
+                    tags=["ears", "requirements", "spec-kit"],
+                    author=ctx.deps.user_id or "DocumentAgent",
+                )
+
+                if success:
+                    stored = f"{feature_path}" if feature_path and write_to_feature_md else "project document"
+                    return (
+                        f"Generated {len(generated)} EARS requirements and saved to {stored}."
+                    )
+                return f"EARS generated but document store failed: {result_data.get('error')}"
+
+            except Exception as e:
+                logger.error(f"Error generating EARS requirements: {e}")
+                return f"Error generating EARS requirements: {str(e)}"
 
         @agent.tool
         async def request_approval(
