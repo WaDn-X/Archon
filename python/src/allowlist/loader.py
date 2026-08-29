@@ -15,59 +15,82 @@ from .service import get_allowlist_service
 logger = logging.getLogger(__name__)
 
 
-def load_allowed_plugin(path: str | Path, *, name: str | None = None) -> ModuleType:
-    """Load a Python plugin only after allowlist verification.
+def _assert_within_root(path: Path, root: Path) -> None:
+	"""Reject plugin paths outside the configured plugin directory."""
+	resolved = path.resolve()
+	root_resolved = root.resolve()
+	if resolved == root_resolved:
+		return
+	try:
+		resolved.relative_to(root_resolved)
+	except ValueError as exc:
+		raise PluginNotAllowedError(
+			f"Plugin path {path} is outside the allowed plugin directory {root}"
+		) from exc
 
-    The file is hashed and checked against the allowlist before importlib runs.
-    """
-    plugin_path = Path(path).resolve()
-    service = get_allowlist_service()
-    entry = service.verify_plugin(plugin_path, expected_name=name)
-    module_name = f"archon_allowlisted_plugin.{entry.name}"
 
-    spec = importlib.util.spec_from_file_location(module_name, plugin_path)
-    if spec is None or spec.loader is None:
-        raise PluginNotAllowedError(f"Could not create import spec for plugin: {plugin_path}")
+def load_allowed_plugin(
+	path: str | Path,
+	*,
+	name: str | None = None,
+	allowed_root: Path | None = None,
+) -> ModuleType:
+	"""Load a Python plugin only after allowlist verification.
 
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    spec.loader.exec_module(module)
-    logger.info("Loaded allowlisted plugin %s from %s", entry.name, plugin_path)
-    return module
+	The file is hashed and checked against the allowlist before importlib runs.
+	When ``allowed_root`` is set, the resolved path must stay inside that directory.
+	"""
+	plugin_path = Path(path).resolve()
+	if allowed_root is not None:
+		_assert_within_root(plugin_path, Path(allowed_root))
+
+	service = get_allowlist_service()
+	entry = service.verify_plugin(plugin_path, expected_name=name)
+	module_name = f"archon_allowlisted_plugin.{entry.name}"
+
+	spec = importlib.util.spec_from_file_location(module_name, plugin_path)
+	if spec is None or spec.loader is None:
+		raise PluginNotAllowedError(f"Could not create import spec for plugin: {plugin_path}")
+
+	module = importlib.util.module_from_spec(spec)
+	sys.modules[module_name] = module
+	spec.loader.exec_module(module)
+	logger.info("Loaded allowlisted plugin %s from %s", entry.name, plugin_path)
+	return module
 
 
 def load_allowlisted_plugins_from_directory(
-    plugin_dir: str | Path,
-    *,
-    register_callback: Any | None = None,
+	plugin_dir: str | Path,
+	*,
+	register_callback: Any | None = None,
 ) -> list[ModuleType]:
-    """Load every allowlisted plugin module found in a directory.
+	"""Load every allowlisted plugin module found in a directory.
 
-    Args:
-        plugin_dir: Directory containing plugin ``.py`` files.
-        register_callback: Optional callable invoked as ``register_callback(module)``
-            after each plugin is loaded.
+	Args:
+		plugin_dir: Directory containing plugin ``.py`` files.
+		register_callback: Optional callable invoked as ``register_callback(module)``
+			after each plugin is loaded.
 
-    Returns:
-        List of successfully loaded plugin modules. Non-allowlisted files are skipped.
-    """
-    directory = Path(plugin_dir)
-    if not directory.is_dir():
-        return []
+	Returns:
+		List of successfully loaded plugin modules. Non-allowlisted files are skipped.
+	"""
+	directory = Path(plugin_dir).resolve()
+	if not directory.is_dir():
+		return []
 
-    loaded: list[ModuleType] = []
-    for plugin_path in sorted(directory.glob("*.py")):
-        if plugin_path.name.startswith("_"):
-            continue
+	loaded: list[ModuleType] = []
+	for plugin_path in sorted(directory.glob("*.py")):
+		if plugin_path.name.startswith("_"):
+			continue
 
-        try:
-            module = load_allowed_plugin(plugin_path)
-        except PluginNotAllowedError as exc:
-            logger.debug("Skipped non-allowlisted plugin %s: %s", plugin_path, exc)
-            continue
+		try:
+			module = load_allowed_plugin(plugin_path, allowed_root=directory)
+		except PluginNotAllowedError as exc:
+			logger.debug("Skipped non-allowlisted plugin %s: %s", plugin_path, exc)
+			continue
 
-        if register_callback is not None:
-            register_callback(module)
-        loaded.append(module)
+		if register_callback is not None:
+			register_callback(module)
+		loaded.append(module)
 
-    return loaded
+	return loaded

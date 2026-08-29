@@ -17,6 +17,7 @@ export interface ProviderInfo {
  * - provider := value of 'LLM_PROVIDER' from ragCreds (if present)
  * - if provider === 'openai': check for valid OPENAI_API_KEY
  * - if provider === 'google' or 'gemini': check for valid GOOGLE_API_KEY
+ * - if provider === 'vertexai': check for valid GCP_PROJECT_ID (ADC on server)
  * - if provider === 'ollama': return true (local, no API key needed)
  * - if no provider: check for any valid API key (OpenAI or Google)
  */
@@ -50,9 +51,11 @@ export function isLmConfigured(
   // Find API keys
   const openAIKeyCred = apiKeyCreds.find(c => c.key.toUpperCase() === 'OPENAI_API_KEY');
   const googleKeyCred = apiKeyCreds.find(c => c.key.toUpperCase() === 'GOOGLE_API_KEY');
+  const gcpProjectCred = ragCreds.find(c => c.key === 'GCP_PROJECT_ID');
   
   const hasOpenAIKey = hasValidCredential(openAIKeyCred);
   const hasGoogleKey = hasValidCredential(googleKeyCred);
+  const hasGcpProjectId = hasValidCredential(gcpProjectCred);
 
   console.log('🔎 isLmConfigured - OpenAI key valid:', hasOpenAIKey);
   console.log('🔎 isLmConfigured - Google key valid:', hasGoogleKey);
@@ -64,6 +67,8 @@ export function isLmConfigured(
   } else if (provider === 'google' || provider === 'gemini') {
     // Google/Gemini provider requires Google API key
     return hasGoogleKey;
+  } else if (provider === 'vertexai') {
+    return hasGcpProjectId;
   } else if (provider === 'ollama') {
     // Ollama is local, doesn't need API key
     return true;
