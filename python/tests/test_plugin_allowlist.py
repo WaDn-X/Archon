@@ -203,6 +203,75 @@ def test_allowlist_api_roundtrip(allowlist_path: Path, monkeypatch: pytest.Monke
     assert data["plugins"][0]["name"] == "demo"
 
 
+def test_allowlist_api_entry_mutations(allowlist_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib.util
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    api_path = Path(__file__).resolve().parents[1] / "src" / "server" / "api_routes" / "plugin_allowlist_api.py"
+    spec = importlib.util.spec_from_file_location("plugin_allowlist_api_entries_test", api_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    service = AllowlistService(allowlist_path)
+    monkeypatch.setattr(module, "get_allowlist_service", lambda: service)
+    monkeypatch.setattr(module, "is_internal_request", lambda _request: True)
+
+    app = FastAPI()
+    app.include_router(module.router)
+    client = TestClient(app)
+
+    add_response = client.post(
+        "/api/plugins/allowlist/entries",
+        json={
+            "action": "add",
+            "section": "plugins",
+            "entry": {"name": "demo", "sha256": "b" * 64, "enabled": False},
+        },
+    )
+    assert add_response.status_code == 200
+    assert add_response.json()["plugins"][0]["enabled"] is False
+
+    enable_response = client.post(
+        "/api/plugins/allowlist/entries",
+        json={"action": "enable", "section": "plugins", "name": "demo"},
+    )
+    assert enable_response.status_code == 200
+    assert enable_response.json()["plugins"][0]["enabled"] is True
+
+    remove_response = client.post(
+        "/api/plugins/allowlist/entries",
+        json={"action": "remove", "section": "plugins", "name": "demo"},
+    )
+    assert remove_response.status_code == 200
+    assert remove_response.json()["plugins"] == []
+
+
+def test_discovered_plugins_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib.util
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    api_path = Path(__file__).resolve().parents[1] / "src" / "server" / "api_routes" / "plugin_allowlist_api.py"
+    spec = importlib.util.spec_from_file_location("plugin_allowlist_api_discovered_test", api_path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    app = FastAPI()
+    app.include_router(module.router)
+    client = TestClient(app)
+
+    response = client.get("/api/plugins/discovered")
+    assert response.status_code == 200
+    names = response.json()
+    assert isinstance(names, list)
+    assert "example_plugin" in names
+
+
 def test_allowlist_api_blocks_external_writes(allowlist_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import importlib.util
 

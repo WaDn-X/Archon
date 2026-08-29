@@ -12,6 +12,7 @@ import {
   Bug,
   Info,
   Database,
+  Shield,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "../features/shared/hooks/useToast";
@@ -33,6 +34,7 @@ import {
 import { UpdateBanner } from "../features/settings/version/components/UpdateBanner";
 import { VersionStatusCard } from "../features/settings/version/components/VersionStatusCard";
 import { MigrationStatusCard } from "../features/settings/migrations/components/MigrationStatusCard";
+import { ExecuteAllowlistSettings } from "../features/settings/allowlist/components/ExecuteAllowlistSettings";
 
 export const SettingsPage = () => {
   const [ragSettings, setRagSettings] = useState<RagSettings>({
@@ -213,6 +215,18 @@ export const SettingsPage = () => {
               />
             </CollapsibleSettingsCard>
           </motion.div>
+          <motion.div variants={itemVariants}>
+            <CollapsibleSettingsCard
+              title="Execute Allowlist"
+              icon={Shield}
+              accentColor="blue"
+              storageKey="execute-allowlist"
+              defaultExpanded={false}
+            >
+              <ExecuteAllowlistSettings />
+            </CollapsibleSettingsCard>
+          </motion.div>
+
           <motion.div variants={itemVariants}>
             <CollapsibleSettingsCard
               title="Code Extraction"
