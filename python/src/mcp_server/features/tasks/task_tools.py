@@ -14,7 +14,7 @@ from mcp.server.fastmcp import Context, FastMCP
 
 from src.mcp_server.utils.error_handling import MCPErrorFormatter
 from src.mcp_server.utils.timeout_config import get_default_timeout
-from src.mcp_server.utils.research_tracker import has_recent_research
+from src.mcp_server.utils.research_tracker import has_recent_research, requires_research_before_doing
 from src.server.config.service_discovery import get_api_url
 
 logger = logging.getLogger(__name__)
@@ -294,20 +294,6 @@ def register_task_tools(mcp: FastMCP):
                             suggestion="Provide task_id to update"
                         )
 
-                    # Require knowledge-base research before starting implementation work
-                    if status == "doing" and not has_recent_research(ctx):
-                        return json.dumps({
-                            "success": False,
-                            "error": "research_required",
-                            "message": (
-                                "Search the knowledge base before setting status to 'doing'. "
-                                "Run rag_search_knowledge_base or rag_search_code_examples first."
-                            ),
-                            "suggestion": (
-                                "rag_search_knowledge_base(query=\"your topic\", match_count=5)"
-                            ),
-                        })
-
                     # Build update fields
                     update_fields = {}
                     if title is not None:
@@ -329,6 +315,42 @@ def register_task_tools(mcp: FastMCP):
                             message="No fields to update",
                             suggestion="Provide at least one field to update",
                         )
+
+                    # Require knowledge-base research only for non-trivial implementation work
+                    if status == "doing" and not has_recent_research(ctx):
+                        task_response = await client.get(urljoin(api_url, f"/api/tasks/{task_id}"))
+                        if task_response.status_code != 200:
+                            return MCPErrorFormatter.from_http_error(task_response, "get task for research gate")
+
+                        task_data = task_response.json()
+                        task_project_id = task_data.get("project_id")
+                        project_data = None
+                        if task_project_id:
+                            project_response = await client.get(
+                                urljoin(api_url, f"/api/projects/{task_project_id}")
+                            )
+                            if project_response.status_code == 200:
+                                project_data = project_response.json()
+
+                        if requires_research_before_doing(
+                            update_fields=update_fields,
+                            task_title=task_data.get("title"),
+                            task_description=task_data.get("description"),
+                            task_feature=task_data.get("feature"),
+                            project=project_data,
+                        ):
+                            return json.dumps({
+                                "success": False,
+                                "error": "research_required",
+                                "message": (
+                                    "Search the knowledge base before setting status to 'doing' "
+                                    "for implementation or research tasks. "
+                                    "Run rag_search_knowledge_base or rag_search_code_examples first."
+                                ),
+                                "suggestion": (
+                                    "rag_search_knowledge_base(query=\"your topic\", match_count=5)"
+                                ),
+                            })
 
                     response = await client.put(
                         urljoin(api_url, f"/api/tasks/{task_id}"),
