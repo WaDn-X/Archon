@@ -40,6 +40,13 @@ from ..services.plan_refine_service import (
     is_plan_refine_request,
     resolve_plan_file,
 )
+from ..services.ears_service import (
+    build_ears_document_body,
+    generate_ears_requirements,
+    merge_ears_into_feature_md,
+    resolve_feature_file,
+)
+from ..services.spec_kit_parser import SpecKitParser
 
 # Using HTTP polling for real-time updates
 
@@ -84,6 +91,12 @@ class CreateTaskRequest(BaseModel):
 class RefinePlanRequest(BaseModel):
     feedback: str
     plan_title: str | None = "Project Plan"
+
+
+class GenerateEarsRequest(BaseModel):
+    feature_text: str | None = None
+    write_to_feature_md: bool = True
+    allow_when_existing: bool = False
 
 
 @router.get("/projects")
@@ -458,6 +471,89 @@ async def refine_project_plan(project_id: str, request: RefinePlanRequest):
         raise
     except Exception as e:
         logfire.error(f"Failed to refine plan | project_id={project_id} | error={str(e)}")
+        raise HTTPException(status_code=500, detail={"error": str(e)})
+
+
+@router.post("/projects/{project_id}/generate-ears")
+async def generate_project_ears(project_id: str, request: GenerateEarsRequest):
+    """Generate EARS requirements for a spec-kit project (skips when EARS already exist)."""
+    try:
+        project_service = ProjectService(get_supabase_client())
+        success, result = project_service.get_project(project_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=result)
+
+        project = result.get("project", {})
+        feature_dir = None
+        for entry in project.get("data", []):
+            if isinstance(entry, dict) and entry.get("feature_dir"):
+                feature_dir = entry["feature_dir"]
+                break
+
+        feature_path = resolve_feature_file(feature_dir)
+        parser = SpecKitParser()
+
+        if feature_path and feature_path.exists():
+            content = feature_path.read_text()
+        elif request.feature_text:
+            content = request.feature_text
+        else:
+            content = project.get("description") or project.get("title") or ""
+
+        if not content.strip():
+            raise HTTPException(status_code=400, detail={"error": "No feature text available"})
+
+        existing_ears = parser.parse_ears_requirements(content)
+        if existing_ears and not request.allow_when_existing:
+            return {
+                "success": True,
+                "project_id": project_id,
+                "generated": False,
+                "ears_requirements": existing_ears,
+                "feature_path": str(feature_path) if feature_path else None,
+                "message": "Existing EARS preserved; generation skipped",
+            }
+
+        generated = await generate_ears_requirements(content, existing_ears)
+        updated_content = merge_ears_into_feature_md(content, generated)
+
+        if request.write_to_feature_md and feature_path and generated:
+            feature_path.write_text(updated_content)
+
+        parsed_ears = parser.parse_ears_requirements(updated_content)
+        feature_name = project.get("title", "Feature")
+        ears_title = f"{feature_name} - EARS Requirements"
+        blocks = build_plan_document_blocks(ears_title, build_ears_document_body(parsed_ears))
+
+        doc_service = DocumentService()
+        doc_success, doc_result = doc_service.add_document(
+            project_id=project_id,
+            document_type="prd",
+            title=ears_title,
+            content={"title": ears_title, "blocks": blocks},
+            tags=["ears", "requirements", "spec-kit"],
+            author="api",
+        )
+
+        if not doc_success:
+            raise HTTPException(status_code=500, detail=doc_result)
+
+        logfire.info(
+            f"EARS generated | project_id={project_id} | count={len(generated)} | existing_preserved={bool(existing_ears)}"
+        )
+        return {
+            "success": True,
+            "project_id": project_id,
+            "generated": bool(generated),
+            "ears_requirements": parsed_ears,
+            "feature_path": str(feature_path) if feature_path else None,
+            "document_id": doc_result.get("document", {}).get("id"),
+            "message": f"Generated {len(generated)} EARS requirements",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logfire.error(f"Failed to generate EARS | project_id={project_id} | error={str(e)}")
         raise HTTPException(status_code=500, detail={"error": str(e)})
 
 

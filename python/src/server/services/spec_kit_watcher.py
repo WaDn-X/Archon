@@ -96,6 +96,9 @@ class SpecKitFileHandler(FileSystemEventHandler):
             return
 
         try:
+            # Generate EARS when feature has content but no requirements yet
+            await self._maybe_generate_ears_for_feature(feature_file)
+
             # Parse feature specification
             spec_data = await self.parser.parse_feature_spec(feature_file)
 
@@ -211,6 +214,7 @@ class SpecKitFileHandler(FileSystemEventHandler):
             feature_file = feature_dir / "feature.md"
             plan_file = feature_dir / "plan.md"
             if feature_file.exists():
+                await self._maybe_generate_ears_for_feature(feature_file)
                 spec_data = await self.parser.parse_feature_spec(feature_file)
 
                 # Update project using service method (works for both backends)
@@ -294,6 +298,38 @@ class SpecKitFileHandler(FileSystemEventHandler):
         except Exception as e:
             logger.error(f"❌ Failed to sync tasks: {e}", exc_info=True)
 
+    async def _maybe_generate_ears_for_feature(self, feature_file: Path) -> bool:
+        """
+        Generate and write EARS into feature.md when description exists but no EARS yet.
+
+        Returns True when new requirements were written to disk.
+        """
+        try:
+            from .ears_service import generate_and_merge_feature_ears
+
+            content = feature_file.read_text()
+            existing = self.parser.parse_ears_requirements(content)
+            if existing:
+                return False
+
+            spec_preview = await self.parser.parse_feature_spec(feature_file)
+            description = (spec_preview.get("description") or "").strip()
+            if not description or description.startswith("Specification for "):
+                return False
+
+            generated, updated_content = await generate_and_merge_feature_ears(feature_file)
+            if not generated:
+                return False
+
+            feature_file.write_text(updated_content)
+            logger.info(
+                f"📝 Generated {len(generated)} EARS requirements in {feature_file}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to generate EARS for {feature_file}: {e}", exc_info=True)
+            return False
+
     async def _store_ears_document(
         self,
         project_id: str,
@@ -304,12 +340,9 @@ class SpecKitFileHandler(FileSystemEventHandler):
         try:
             from .projects.document_service import DocumentService
             from .plan_refine_service import build_plan_document_blocks
+            from .ears_service import build_ears_document_body
 
-            lines = [
-                f"WHEN {req['condition']} THE SYSTEM SHALL {req['behavior']}."
-                for req in ears_requirements
-            ]
-            body = "\n".join(f"- {line}" for line in lines)
+            body = build_ears_document_body(ears_requirements)
             blocks = build_plan_document_blocks(f"{feature_name} - EARS Requirements", body)
 
             doc_service = DocumentService()
