@@ -9,11 +9,11 @@ tasks:
       BASE_URL=https://openrouter.ai/api/v1
 
       # OpenRouter API Key
-      LLM_API_KEY=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
+      LLM_API_KEY=
 
       # OpenAI API Key (needed for embeddings)
       # Since we're using OpenRouter, we'll use the same key for now
-      OPENAI_API_KEY=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
+      OPENAI_API_KEY=
 
       # The LLM you want to use for the reasoner
       # Using a free model from OpenRouter
